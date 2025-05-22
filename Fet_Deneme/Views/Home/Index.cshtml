@@ -1,0 +1,279 @@
+﻿@{
+    ViewData["Title"] = "FET Ana Sayfa";
+}
+
+<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+    .fet-home-center-panel {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 40px 60px;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+        min-width: 320px;
+        text-align: center;
+    }
+    .fet-home-center-panel button {
+        margin: 10px 20px;
+        min-width: 100px;
+        font-size: 1.1em;
+    }
+    .fet-filename-bar {
+        position: fixed;
+        top: 38px;
+        left: 0;
+        width: 100vw;
+        background: #f7f7f7;
+        border-bottom: 1px solid #e0e0e0;
+        z-index: 10;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.08em;
+        color: #444;
+    }
+    .fet-filename-bar .fet-filename {
+        font-weight: 600;
+        margin-right: 30px;
+    }
+    .fet-filename-bar .fet-file-btn {
+        margin-left: 8px;
+        margin-right: 8px;
+        min-width: 90px;
+    }
+</style>
+
+<div id="fet-filename-bar" class="fet-filename-bar" style="display:none;">
+    <span class="fet-filename" id="fet-current-filename"></span>
+    <button class="btn btn-success btn-sm fet-file-btn" id="fet-btn-save">Kaydet</button>
+    <button class="btn btn-warning btn-sm fet-file-btn" id="fet-btn-saveas">Farklı Kaydet</button>
+</div>
+
+<div class="fet-home-center-panel">
+    <div style="margin-bottom: 20px;">
+        <button class="btn btn-primary" onclick="fetNewProject()">Yeni</button>
+        <button class="btn btn-secondary" onclick="fetOpenProject()">Aç</button>
+    </div>
+
+</div>
+
+@section Scripts {
+<script>
+window.fetCurrentFileName = null;
+window.fetCurrentXmlContent = null;
+
+window.updateFileBar = function() {
+    if (window.fetCurrentFileName) {
+        document.getElementById('fet-filename-bar').style.display = '';
+        document.getElementById('fet-current-filename').textContent = window.fetCurrentFileName;
+    } else {
+        document.getElementById('fet-filename-bar').style.display = 'none';
+    }
+}
+
+window.saveToLocal = function() {
+    if (window.fetCurrentFileName && window.fetCurrentXmlContent) {
+        localStorage.setItem('fetFileName', window.fetCurrentFileName);
+        localStorage.setItem('fetXmlContent', window.fetCurrentXmlContent);
+    } else {
+        localStorage.removeItem('fetFileName');
+        localStorage.removeItem('fetXmlContent');
+    }
+}
+
+window.loadFromLocal = function() {
+    const fileName = localStorage.getItem('fetFileName');
+    const xmlContent = localStorage.getItem('fetXmlContent');
+    if (fileName && xmlContent) {
+        window.fetCurrentFileName = fileName;
+        window.fetCurrentXmlContent = xmlContent;
+        // Sunucuya da yükle (Aç mantığıyla)
+        fetch('/Home/OpenProject?fileName=' + encodeURIComponent(fileName), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(xmlContent)
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                window.updateFileBar();
+            }
+        });
+    }
+}
+
+window.fetNewProject = function() {
+    fetch('/Home/NewProject', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                window.fetCurrentFileName = data.fileName;
+                window.fetCurrentXmlContent = data.xmlContent || null;
+                window.updateFileBar();
+                window.saveToLocal();
+                Swal.fire('Yeni proje oluşturuldu', '', 'success');
+            }
+        });
+}
+
+window.fetOpenProject = function() {
+    Swal.fire({
+        title: 'Proje Aç',
+        html: '<input type="file" id="fetFileInput" accept=".fet,.xml" class="swal2-input" />',
+        showCancelButton: true,
+        confirmButtonText: 'Aç',
+        cancelButtonText: 'İptal',
+        preConfirm: () => {
+            const fileInput = Swal.getPopup().querySelector('#fetFileInput');
+            if (!fileInput.files[0]) {
+                Swal.showValidationMessage('Lütfen bir .fet dosyası seçin');
+            }
+            return fileInput.files[0];
+        }
+    }).then((result) => {
+        if (result.isConfirmed && result.value) {
+            const file = result.value;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                window.fetCurrentXmlContent = e.target.result;
+                window.fetCurrentFileName = file.name;
+                // Browser ortamında file.path yoktur, ama varsa backend'e ilet
+                let filePath = file.path || '';
+                fetch('/Home/OpenProject?fileName=' + encodeURIComponent(file.name) + '&filePath=' + encodeURIComponent(filePath), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(window.fetCurrentXmlContent)
+                }).then(r => r.json()).then(data => {
+                    if (data.success) {
+                        window.updateFileBar();
+                        window.saveToLocal();
+                        Swal.fire('Proje açıldı', '', 'success');
+                    }
+                });
+            };
+            reader.readAsText(file);
+        }
+    });
+}
+
+document.getElementById('fet-btn-save').onclick = function() {
+    if (!window.fetCurrentFileName) return;
+    fetch('/Home/SaveProject', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire('Kaydedildi', '', 'success');
+                window.saveToLocal();
+            }
+        });
+};
+
+document.getElementById('fet-btn-saveas').onclick = function() {
+    if (!window.fetCurrentFileName) return;
+    if (window.showSaveFilePicker) {
+        (async () => {
+            try {
+                const opts = {
+                    suggestedName: window.fetCurrentFileName,
+                    types: [{ description: 'FET XML', accept: { 'application/xml': ['.fet', '.xml'] } }]
+                };
+                const handle = await window.showSaveFilePicker(opts);
+                const writable = await handle.createWritable();
+                await writable.write(window.fetCurrentXmlContent || '');
+                await writable.close();
+                window.fetCurrentFileName = handle.name;
+                window.updateFileBar();
+                window.saveToLocal();
+                Swal.fire('Farklı kaydedildi', '', 'success');
+            } catch (e) {
+                Swal.fire('İşlem iptal edildi', '', 'info');
+            }
+        })();
+    } else {
+        Swal.fire({
+            title: 'Farklı Kaydet',
+            input: 'text',
+            inputLabel: 'Kaydetmek istediğiniz tam dosya yolu',
+            inputValue: window.fetCurrentFileName,
+            showCancelButton: true,
+            confirmButtonText: 'Kaydet',
+            cancelButtonText: 'İptal',
+            inputPlaceholder: 'C:\\Users\\kullanici\\Desktop\\dosya.fet'
+        }).then((result) => {
+            if (result.isConfirmed && result.value) {
+                fetch('/Home/SaveProjectAs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        xmlContent: window.fetCurrentXmlContent || '',
+                        filePath: result.value
+                    })
+                }).then (r => r.json()).then(data => {
+                    if (data.success) {
+                        window.fetCurrentFileName = data.fileName;
+                        window.updateFileBar();
+                        window.saveToLocal();
+                        Swal.fire('Farklı kaydedildi', '', 'success');
+                    } else {
+                        Swal.fire('Hata', data.message || 'Kaydedilemedi', 'error');
+                    }
+                });
+            }
+        });
+    }
+};
+
+window.fetImportSubjectsCsv = function() {
+    Swal.fire({
+        title: 'Ders adlarını CSV dosyasından al',
+        html: '<input type="file" id="fetCsvInput" accept=".csv,text/csv" class="swal2-input" />',
+        showCancelButton: true,
+        confirmButtonText: 'İçe Aktar',
+        cancelButtonText: 'İptal',
+        preConfirm: () => {
+            const fileInput = Swal.getPopup().querySelector('#fetCsvInput');
+            if (!fileInput.files[0]) {
+                Swal.showValidationMessage('Lütfen bir CSV dosyası seçin');
+            }
+            return fileInput.files[0];
+        }
+    }).then((result) => {
+        if (result.isConfirmed && result.value) {
+            const file = result.value;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csvContent = e.target.result;
+                fetch('/Home/ImportSubjectsCsv', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        csvContent: csvContent,
+                        fileName: window.fetCurrentFileName || ''
+                    })
+                }).then(r => r.json()).then(data => {
+                    if (data.success) {
+                        window.fetCurrentXmlContent = data.xmlContent;
+                        window.saveToLocal();
+                        Swal.fire('Dersler başarıyla içe aktarıldı', '', 'success');
+                    } else {
+                        Swal.fire('Hata', data.message || 'İçe aktarılamadı', 'error');
+                    }
+                });
+            };
+            reader.readAsText(file);
+        }
+    });
+}
+
+window.addEventListener('DOMContentLoaded', function() {
+    window.loadFromLocal();
+});
+
+window.updateFileBar();
+</script>
+}
