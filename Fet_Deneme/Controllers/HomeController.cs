@@ -1166,6 +1166,184 @@ case "hours":
             }
         }
 
+        // Gün ve saat listesini XML'den oku ve JSON olarak döndür
+        [HttpGet]
+        public JsonResult GetDaysAndHours()
+        {
+            if (string.IsNullOrEmpty(CurrentXmlContent))
+                return Json(new { success = false, message = "Proje yüklü değil" });
+            try
+            {
+                var serializer = new System.Xml.Serialization.XmlSerializer(typeof(Fet_Deneme.Models.FetRoot));
+                using var reader = new StringReader(CurrentXmlContent);
+                var fetRoot = (Fet_Deneme.Models.FetRoot?)serializer.Deserialize(reader);
+                var days = fetRoot?.Days?.Select(d => d.Name).Where(x => !string.IsNullOrEmpty(x)).ToList() ?? new List<string?>();
+                var hours = fetRoot?.Hours?.Select(h => h.Name).Where(x => !string.IsNullOrEmpty(x)).ToList() ?? new List<string?>();
+                return Json(new { success = true, days, hours });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        // Add a time constraint to the XML
+        [HttpPost]
+        public JsonResult AddConstraint([FromBody] ConstraintRequest req)
+        {
+            if (string.IsNullOrEmpty(CurrentXmlContent))
+                return Json(new { success = false, message = "No project loaded." });
+            try
+            {
+                var doc = new System.Xml.XmlDocument();
+                doc.LoadXml(CurrentXmlContent);
+                var constraintsList = doc.SelectSingleNode("/fet/Time_Constraints_List");
+                if (constraintsList == null)
+                    return Json(new { success = false, message = "Time_Constraints_List not found in XML." });
+
+                System.Xml.XmlElement? newConstraint = null;
+                switch (req.Type)
+                {
+                    case "ConstraintActivityPreferredTimeSlots":
+                        newConstraint = CreateConstraintActivityPreferredTimeSlots(doc, req.Data);
+                        break;
+                    case "ConstraintStudentsMaxHoursDaily":
+                        newConstraint = CreateConstraintStudentsMaxHoursDaily(doc, req.Data);
+                        break;
+                    case "ConstraintStudentsMaxHoursContinuously":
+                        newConstraint = CreateConstraintStudentsMaxHoursContinuously(doc, req.Data);
+                        break;
+                    case "ConstraintMinDaysBetweenActivities":
+                        newConstraint = CreateConstraintMinDaysBetweenActivities(doc, req.Data);
+                        break;
+                    case "ConstraintActivitiesNotOverlapping":
+                        newConstraint = CreateConstraintActivitiesNotOverlapping(doc, req.Data);
+                        break;
+                    case "ConstraintBreakTimes":
+                        newConstraint = CreateConstraintBreakTimes(doc, req.Data);
+                        break;
+                    default:
+                        return Json(new { success = false, message = "Unknown constraint type." });
+                }
+                if (newConstraint == null)
+                    return Json(new { success = false, message = "Constraint could not be created." });
+                constraintsList.AppendChild(newConstraint);
+
+                using (var sw = new System.IO.StringWriter())
+                using (var xw = new System.Xml.XmlTextWriter(sw))
+                {
+                    xw.Formatting = System.Xml.Formatting.Indented;
+                    doc.WriteTo(xw);
+                    xw.Flush();
+                    CurrentXmlContent = sw.ToString();
+                }
+                if (!string.IsNullOrEmpty(CurrentFilePath))
+                    System.IO.File.WriteAllText(CurrentFilePath, CurrentXmlContent);
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        public class ConstraintRequest
+        {
+            public string Type { get; set; } = string.Empty;
+            public dynamic Data { get; set; } = null!;
+        }
+
+        // Helper methods for each constraint type
+        private System.Xml.XmlElement CreateConstraintActivityPreferredTimeSlots(System.Xml.XmlDocument doc, dynamic data)
+        {
+            var node = doc.CreateElement("ConstraintActivityPreferredTimeSlots");
+            node.AppendChild(CreateTextElement(doc, "Weight_Percentage", data.WeightPercentage?.ToString() ?? "100"));
+            node.AppendChild(CreateTextElement(doc, "Activity_Id", data.ActivityId.ToString()));
+            var prefTimes = doc.CreateElement("Preferred_Starting_Times");
+            if (data.PreferredStartingTimes != null)
+            {
+                foreach (var t in data.PreferredStartingTimes)
+                {
+                    var pref = doc.CreateElement("Preferred_Starting_Time");
+                    pref.AppendChild(CreateTextElement(doc, "Day", t.Day));
+                    pref.AppendChild(CreateTextElement(doc, "Hour", t.Hour));
+                    prefTimes.AppendChild(pref);
+                }
+            }
+            node.AppendChild(prefTimes);
+            node.AppendChild(CreateTextElement(doc, "Active", (data.Active ?? true).ToString().ToLower()));
+            node.AppendChild(CreateTextElement(doc, "Comments", data.Comments ?? ""));
+            return node;
+        }
+        private System.Xml.XmlElement CreateConstraintStudentsMaxHoursDaily(System.Xml.XmlDocument doc, dynamic data)
+        {
+            var node = doc.CreateElement("ConstraintStudentsMaxHoursDaily");
+            node.AppendChild(CreateTextElement(doc, "Weight_Percentage", data.WeightPercentage?.ToString() ?? "100"));
+            node.AppendChild(CreateTextElement(doc, "Maximum_Hours_Daily", data.MaximumHoursDaily.ToString()));
+            node.AppendChild(CreateTextElement(doc, "Active", (data.Active ?? true).ToString().ToLower()));
+            node.AppendChild(CreateTextElement(doc, "Comments", data.Comments ?? ""));
+            return node;
+        }
+        private System.Xml.XmlElement CreateConstraintStudentsMaxHoursContinuously(System.Xml.XmlDocument doc, dynamic data)
+        {
+            var node = doc.CreateElement("ConstraintStudentsMaxHoursContinuously");
+            node.AppendChild(CreateTextElement(doc, "Weight_Percentage", data.WeightPercentage?.ToString() ?? "100"));
+            node.AppendChild(CreateTextElement(doc, "Maximum_Hours_Continuously", data.MaximumHoursContinuously.ToString()));
+            node.AppendChild(CreateTextElement(doc, "Active", (data.Active ?? true).ToString().ToLower()));
+            node.AppendChild(CreateTextElement(doc, "Comments", data.Comments ?? ""));
+            return node;
+        }
+        private System.Xml.XmlElement CreateConstraintMinDaysBetweenActivities(System.Xml.XmlDocument doc, dynamic data)
+        {
+            var node = doc.CreateElement("ConstraintMinDaysBetweenActivities");
+            node.AppendChild(CreateTextElement(doc, "Weight_Percentage", data.WeightPercentage?.ToString() ?? "100"));
+            node.AppendChild(CreateTextElement(doc, "Consecutive_If_Same_Day", (data.ConsecutiveIfSameDay ?? false).ToString().ToLower()));
+            var ids = data.ActivityIds as IEnumerable<object> ?? new List<object>();
+            node.AppendChild(CreateTextElement(doc, "Number_of_Activities", ids.Count().ToString()));
+            foreach (var id in ids)
+                node.AppendChild(CreateTextElement(doc, "Activity_Id", id.ToString()));
+            node.AppendChild(CreateTextElement(doc, "MinDays", data.MinDays.ToString()));
+            node.AppendChild(CreateTextElement(doc, "Active", (data.Active ?? true).ToString().ToLower()));
+            node.AppendChild(CreateTextElement(doc, "Comments", data.Comments ?? ""));
+            return node;
+        }
+        private System.Xml.XmlElement CreateConstraintActivitiesNotOverlapping(System.Xml.XmlDocument doc, dynamic data)
+        {
+            var node = doc.CreateElement("ConstraintActivitiesNotOverlapping");
+            node.AppendChild(CreateTextElement(doc, "Weight_Percentage", data.WeightPercentage?.ToString() ?? "100"));
+            var ids = data.ActivityIds as IEnumerable<object> ?? new List<object>();
+            node.AppendChild(CreateTextElement(doc, "Number_of_Activities", ids.Count().ToString()));
+            foreach (var id in ids)
+                node.AppendChild(CreateTextElement(doc, "Activity_Id", id.ToString()));
+            node.AppendChild(CreateTextElement(doc, "Active", (data.Active ?? true).ToString().ToLower()));
+            node.AppendChild(CreateTextElement(doc, "Comments", data.Comments ?? ""));
+            return node;
+        }
+        private System.Xml.XmlElement CreateConstraintBreakTimes(System.Xml.XmlDocument doc, dynamic data)
+        {
+            var node = doc.CreateElement("ConstraintBreakTimes");
+            node.AppendChild(CreateTextElement(doc, "Weight_Percentage", data.WeightPercentage?.ToString() ?? "100"));
+            var breaks = data.BreakTimes as IEnumerable<object> ?? new List<object>();
+            node.AppendChild(CreateTextElement(doc, "Number_of_Break_Times", breaks.Count().ToString()));
+            foreach (var b in breaks)
+            {
+                var breakNode = doc.CreateElement("Break_Time");
+                var day = b.GetType().GetProperty("Day")?.GetValue(b, null)?.ToString() ?? string.Empty;
+                var hour = b.GetType().GetProperty("Hour")?.GetValue(b, null)?.ToString() ?? string.Empty;
+                breakNode.AppendChild(CreateTextElement(doc, "Day", day));
+                breakNode.AppendChild(CreateTextElement(doc, "Hour", hour));
+                node.AppendChild(breakNode);
+            }
+            node.AppendChild(CreateTextElement(doc, "Active", (data.Active ?? true).ToString().ToLower()));
+            node.AppendChild(CreateTextElement(doc, "Comments", data.Comments ?? ""));
+            return node;
+        }
+        private System.Xml.XmlElement CreateTextElement(System.Xml.XmlDocument doc, string name, string? value)
+        {
+            var el = doc.CreateElement(name);
+            el.InnerText = value ?? string.Empty;
+            return el;
+        }
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public IActionResult Error()
         {

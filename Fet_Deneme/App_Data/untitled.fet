@@ -4,7 +4,7 @@
   <Institution_Name>Varsayılan Kurum</Institution_Name>
   <Comments>Varsayılan Açıklamalar</Comments>
   <Days_List>
-    <Number_of_Days>5</Number_of_Days>
+    <Number_of_Days>10</Number_of_Days>
     <Day>
       <Name>D1</Name>
       <Long_Name>Pazartesi</Long_Name>
@@ -25,32 +25,52 @@
       <Name>D5</Name>
       <Long_Name>Cuma</Long_Name>
     </Day>
+    <Day>
+      <Name>D6</Name>
+      <Long_Name>Day 6</Long_Name>
+    </Day>
+    <Day>
+      <Name>D7</Name>
+      <Long_Name>Day 7</Long_Name>
+    </Day>
+    <Day>
+      <Name>D8</Name>
+      <Long_Name>Day 8</Long_Name>
+    </Day>
+    <Day>
+      <Name>D9</Name>
+      <Long_Name>Day 9</Long_Name>
+    </Day>
+    <Day>
+      <Name>D10</Name>
+      <Long_Name>Day 10</Long_Name>
+    </Day>
   </Days_List>
   <Hours_List>
     <Number_of_Hours>6</Number_of_Hours>
     <Hour>
       <Name>H1</Name>
-      <Long_Name>Hour 1</Long_Name>
+      <Long_Name>08:00</Long_Name>
     </Hour>
     <Hour>
       <Name>H2</Name>
-      <Long_Name>Hour 2</Long_Name>
+      <Long_Name>09:00</Long_Name>
     </Hour>
     <Hour>
       <Name>H3</Name>
-      <Long_Name>Hour 3</Long_Name>
+      <Long_Name>10:00</Long_Name>
     </Hour>
     <Hour>
       <Name>H4</Name>
-      <Long_Name>Hour 4</Long_Name>
+      <Long_Name>11:00</Long_Name>
     </Hour>
     <Hour>
       <Name>H5</Name>
-      <Long_Name>Hour 5</Long_Name>
+      <Long_Name>12:00</Long_Name>
     </Hour>
     <Hour>
       <Name>H6</Name>
-      <Long_Name>Hour 6</Long_Name>
+      <Long_Name>13:00</Long_Name>
     </Hour>
   </Hours_List>
   <Subjects_List>

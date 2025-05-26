@@ -99,12 +99,24 @@
                     </div>
                     <div class="col-6">
                         <button class="btn btn-secondary w-100">Öğrenciler</button>
-                    </div>
-                    <div class="col-6">
+                    </div>                    <div class="col-6">
                         <button class="btn btn-secondary w-100">Dersler</button>
                     </div>
                     <div class="col-6">
-                        <button class="btn btn-secondary w-100">Gelişmiş</button>
+                        <div class="dropdown">
+                            <button class="btn btn-secondary w-100 dropdown-toggle" type="button" id="gelismisDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                Gelişmiş
+                            </button>
+                            <ul class="dropdown-menu w-100" aria-labelledby="gelismisDropdown">
+                                <li><a class="dropdown-item" href="#" onclick="openConstraintDialog('ConstraintBasicCompulsoryTime')">Temel Zorunlu Zaman</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="openConstraintDialog('ConstraintStudentsMaxHoursDaily')">Öğrenciler Günlük Maksimum Saat</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="openConstraintDialog('ConstraintStudentsMaxHoursContinuously')">Öğrenciler Aralıksız Maksimum Saat</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="openConstraintDialog('ConstraintMinDaysBetweenActivities')">Etkinlikler Arası Minimum Gün</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="openConstraintDialog('ConstraintBreakTimes')">Kapatılacak Zaman Bloğu</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="openConstraintDialog('ConstraintActivityPreferredTimeSlots')">Etkinlik Tercihli Zaman Slotları</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="openConstraintDialog('ConstraintActivitiesNotOverlapping')">Etkinlikler Çakışmasın</a></li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -972,8 +984,573 @@ window.fetShowHours = function() {
                         }
                     };
                 }
+            });        });
+};
+
+// Constraint dialog function
+window.openConstraintDialog = function(constraintType) {
+    if (constraintType === 'ConstraintActivityPreferredTimeSlots') {
+        // Gün ve saatleri ve aktiviteleri paralel çek
+        Promise.all([
+            fetch('/Home/GetDaysAndHours').then(r => r.json()),
+            fetch('/Home/ShowData?dataType=activities').then(r => r.json())
+        ]).then(([data, actData]) => {
+            if (!data.success) {
+                Swal.fire('Hata', data.message || 'Gün ve saatler alınamadı', 'error');
+                return;
+            }
+            if (!actData.success) {
+                Swal.fire('Hata', actData.message || 'Aktiviteler alınamadı', 'error');
+                return;
+            }
+            const days = data.days.filter(Boolean);
+            const hours = data.hours.filter(Boolean);
+            const activities = actData.data || [];
+            let forbiddenSlots = new Set();
+            // Activity dropdown HTML
+            let activityOptions = activities.map(a => {
+                let subject = (a.subject !== undefined && a.subject !== null && a.subject !== '') ? a.subject : 'Bilinmiyor';
+                let id = (a.id !== undefined && a.id !== null) ? a.id : '-';
+                return `<option value="${id}">${id} - ${subject}</option>`;
+            }).join('');
+            let activityHtml = `<div class='mb-2'><label>Etkinlik:</label><select id='activity-select' class='form-select'>${activityOptions}</select></div>`;
+            // Tablo HTML oluştur
+            let tableHtml = '<table class="table table-bordered text-center align-middle"><thead><tr><th></th>';
+            days.forEach(day => { tableHtml += `<th>${day}</th>`; });
+            tableHtml += '</tr></thead><tbody>';
+            hours.forEach((hour, hIdx) => {
+                tableHtml += `<tr><th>${hour}</th>`;
+                days.forEach((day, dIdx) => {
+                    const cellId = `${day}-${hour}`;
+                    tableHtml += `<td id="cell-${cellId}" style="background:#4caf50;cursor:pointer;" onclick="toggleSlot('${cellId}')"></td>`;
+                });
+                tableHtml += '</tr>';
+            });
+            tableHtml += '</tbody></table>';
+            // Slot yönetimi
+            window.toggleSlot = function(cellId) {
+                const td = document.getElementById('cell-' + cellId);
+                if (!td) return;
+                if (forbiddenSlots.has(cellId)) {
+                    forbiddenSlots.delete(cellId);
+                    td.style.background = '#4caf50';
+                } else {
+                    forbiddenSlots.add(cellId);
+                    td.style.background = '#e53935';
+                }
+            };
+            Swal.fire({
+                title: 'Etkinlik Tercihli Zaman Slotları',
+                html: `
+                    ${activityHtml}
+                    <div class='mb-2'>Kırmızı: Yasaklı, Yeşil: İzinli</div>
+                    ${tableHtml}
+                `,
+                width: '800px',
+                showCancelButton: true,
+                confirmButtonText: 'Kaydet',
+                cancelButtonText: 'İptal',
+                preConfirm: () => {
+                    let selectedActivityId = parseInt(document.getElementById('activity-select').value);
+                    let result = [];
+                    forbiddenSlots.forEach(cellId => {
+                        const [day, hour] = cellId.split('-');
+                        result.push({ Day: day, Hour: hour });
+                    });
+                    let constraintObj = {
+                        Type: constraintType,
+                        Comments: document.getElementById('constraint-comments').value || '',
+                        WeightPercentage: 100,
+                        Active: true,
+                        Activity_Id: selectedActivityId,
+                        Preferred_Time_Slots: result
+                    };
+                    return constraintObj;
+                }
+            }).then(result => {
+                if (result.isConfirmed && result.value) {
+                    fetch('/Home/AddOrUpdateTimeConstraint', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(result.value)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire('Başarılı', 'Kısıt başarıyla kaydedildi', 'success');
+                            if (data.xmlContent) {
+                                window.fetCurrentXmlContent = data.xmlContent;
+                            }
+                        } else {
+                            Swal.fire('Hata', data.message || 'Kısıt kaydedilemedi', 'error');
+                        }
+                    })
+                    .catch(err => {
+                        Swal.fire('Sunucu Hatası', 'Kısıt kaydedilemedi: ' + err.message, 'error');
+                    });
+                }
             });
         });
+        return;
+    }
+    if (constraintType === 'ConstraintStudentsMaxHoursDaily' || constraintType === 'ConstraintStudentsMaxHoursContinuously') {
+        const isDaily = constraintType === 'ConstraintStudentsMaxHoursDaily';
+        Swal.fire({
+            title: isDaily ? 'Öğrenciler Günlük Maksimum Saat' : 'Öğrenciler Aralıksız Maksimum Saat',
+            html: `
+                <div class="mb-3">
+                    <label class="form-label">${isDaily ? 'Günlük Maksimum Ders Saati' : 'Aralıksız Maksimum Ders Saati'}</label>
+                    <input type="number" class="form-control" id="max-hours" min="1" max="20" value="6">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Yumuşaklık Yüzdesi (%)</label>
+                    <input type="number" class="form-control" id="softness" min="1" max="100" value="100">
+                </div>
+            `,
+            width: '400px',
+            showCancelButton: true,
+            confirmButtonText: 'Kaydet',
+            cancelButtonText: 'İptal',
+            preConfirm: () => {
+                const maxHours = parseInt(document.getElementById('max-hours').value);
+                const softness = parseInt(document.getElementById('softness').value);
+                if (!maxHours || maxHours < 1) {
+                    Swal.showValidationMessage('Geçerli bir maksimum saat girin');
+                    return false;
+                }
+                if (!softness || softness < 1 || softness > 100) {
+                    Swal.showValidationMessage('Yumuşaklık yüzdesi 1-100 arası olmalı');
+                    return false;
+                }
+                return {
+                    Type: constraintType,
+                    MaxHours: maxHours,
+                    WeightPercentage: softness,
+                    Active: true
+                };
+            }
+        }).then(result => {
+            if (result.isConfirmed && result.value) {
+                fetch('/Home/AddOrUpdateTimeConstraint', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(result.value)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire('Başarılı', 'Kısıt başarıyla kaydedildi', 'success');
+                        if (data.xmlContent) {
+                            window.fetCurrentXmlContent = data.xmlContent;
+                        }
+                    } else {
+                        Swal.fire('Hata', data.message || 'Kısıt kaydedilemedi', 'error');
+                    }
+                })
+                .catch(err => {
+                    Swal.fire('Sunucu Hatası', 'Kısıt kaydedilemedi: ' + err.message, 'error');
+                });
+            }
+        });
+        return;
+    }
+    if (constraintType === 'ConstraintMinDaysBetweenActivities') {
+        fetch('/Home/ShowData?dataType=activities')
+            .then(r => r.json())
+            .then(actData => {
+                if (!actData.success) {
+                    Swal.fire('Hata', actData.message || 'Aktiviteler alınamadı', 'error');
+                    return;
+                }
+                const activities = actData.data || [];
+                // Etkinlikleri string olarak göster (görseldeki gibi)
+                let activityList = activities.map(a => {
+                    let subject = (a.subject !== undefined && a.subject !== null && a.subject !== '') ? a.subject : 'Bilinmiyor';
+                    let id = (a.id !== undefined && a.id !== null) ? a.id : '-';
+                    return `${id} - ${subject}`;
+                });
+                // Modal HTML
+                let html = `
+<div class="d-flex gap-2 mb-2" style="height:220px;">
+    <select id="fet-min-days-activity-list" multiple size="12" class="form-select" style="width:48%;font-size:13px;">
+        ${activityList.map((txt, i) => `<option value="${activities[i].id}">${txt}</option>`).join('')}
+    </select>
+    <select id="fet-min-days-activity-selected" multiple size="12" class="form-select" style="width:48%;font-size:13px;"></select>
+</div>
+<div class="d-flex gap-2 mb-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="fet-min-days-btn-all">Tümü</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="fet-min-days-btn-clear">Temizle</button>
+</div>
+<div class="d-flex gap-2 mb-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="fet-min-days-btn-right">&gt;</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="fet-min-days-btn-left">&lt;</button>
+</div>
+<div class="mb-2">
+    <label>Min days</label>
+    <input type="number" class="form-control" id="fet-min-days-value" min="1" max="30" value="1">
+</div>
+<div class="form-check mb-2">
+    <input class="form-check-input" type="checkbox" value="1" id="fet-min-days-consecutive" checked>
+    <label class="form-check-label" for="fet-min-days-consecutive">
+        If two activities are on the same day, make them consecutive
+    </label>
+</div>
+<div class="mb-2">
+    <label>Weight percentage (recommended: 95.0% - 100.0%, allowed: 0.0% - 100.0%)</label>
+    <input type="number" class="form-control" id="fet-min-days-weight" min="0" max="100" value="95">
+</div>
+`;
+                Swal.fire({
+                    title: 'Etkinlikler Arası Minimum Gün',
+                    html: html,
+                    width: '900px',
+                    showCancelButton: true,
+                    confirmButtonText: 'Kısıt Ekle',
+                    cancelButtonText: 'Kapat',
+                    didOpen: () => {
+                        // Buton eventleri
+                        const list = document.getElementById('fet-min-days-activity-list');
+                        const sel = document.getElementById('fet-min-days-activity-selected');
+                        document.getElementById('fet-min-days-btn-all').onclick = function() {
+                            // Tümünü sağa aktar
+                            sel.innerHTML = list.innerHTML;
+                        };
+                        document.getElementById('fet-min-days-btn-clear').onclick = function() {
+                            sel.innerHTML = '';
+                        };
+                        document.getElementById('fet-min-days-btn-right').onclick = function() {
+                            Array.from(list.selectedOptions).forEach(opt => {
+                                if (![...sel.options].some(o => o.value === opt.value)) {
+                                    let newOpt = opt.cloneNode(true);
+                                    sel.appendChild(newOpt);
+                                }
+                            });
+                        };
+                        document.getElementById('fet-min-days-btn-left').onclick = function() {
+                            Array.from(sel.selectedOptions).forEach(opt => sel.removeChild(opt));
+                        };
+                    },
+                    preConfirm: () => {
+                        const sel = document.getElementById('fet-min-days-activity-selected');
+                        const selectedIds = Array.from(sel.options).map(o => parseInt(o.value)).filter(Boolean);
+                        const minDays = parseInt(document.getElementById('fet-min-days-value').value);
+                        const consecutive = document.getElementById('fet-min-days-consecutive').checked;
+                        const weight = parseFloat(document.getElementById('fet-min-days-weight').value);
+                        if (!selectedIds.length) {
+                            Swal.showValidationMessage('En az bir etkinlik seçmelisiniz');
+                            return false;
+                        }
+                        if (!minDays || minDays < 1) {
+                            Swal.showValidationMessage('Geçerli bir minimum gün girin');
+                            return false;
+                        }
+                        if (isNaN(weight) || weight < 0 || weight > 100) {
+                            Swal.showValidationMessage('Ağırlık yüzdesi 0-100 arası olmalı');
+                            return false;
+                        }
+                        return {
+                            Type: constraintType,
+                            Activity_Ids: selectedIds,
+                            MinDays: minDays,
+                            Consecutive: consecutive,
+                            WeightPercentage: weight,
+                            Active: true
+                        };
+                    }
+                }).then(result => {
+                    if (result.isConfirmed && result.value) {
+                        fetch('/Home/AddOrUpdateTimeConstraint', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(result.value)
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                Swal.fire('Başarılı', 'Kısıt başarıyla kaydedildi', 'success');
+                                if (data.xmlContent) {
+                                    window.fetCurrentXmlContent = data.xmlContent;
+                                }
+                            } else {
+                                Swal.fire('Hata', data.message || 'Kısıt kaydedilemedi', 'error');
+                            }
+                        })
+                        .catch(err => {
+                            Swal.fire('Sunucu Hatası', 'Kısıt kaydedilemedi: ' + err.message, 'error');
+                        });
+                    }
+                });
+            });
+        return;
+    }
+    if (constraintType === 'ConstraintActivitiesNotOverlapping') {
+        fetch('/Home/ShowData?dataType=activities')
+            .then(r => r.json())
+            .then(actData => {
+                if (!actData.success) {
+                    Swal.fire('Hata', actData.message || 'Aktiviteler alınamadı', 'error');
+                    return;
+                }
+                const activities = actData.data || [];
+                let activityList = activities.map(a => {
+                    let subject = (a.subject !== undefined && a.subject !== null && a.subject !== '') ? a.subject : 'Bilinmiyor';
+                    let id = (a.id !== undefined && a.id !== null) ? a.id : '-';
+                    return `${id} - ${subject}`;
+                });
+                let html = `
+<div class="d-flex gap-2 mb-2" style="height:220px;">
+    <select id="fet-not-overlap-activity-list" multiple size="12" class="form-select" style="width:48%;font-size:13px;">
+        ${activityList.map((txt, i) => `<option value="${activities[i].id}">${txt}</option>`).join('')}
+    </select>
+    <select id="fet-not-overlap-activity-selected" multiple size="12" class="form-select" style="width:48%;font-size:13px;"></select>
+</div>
+<div class="d-flex gap-2 mb-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="fet-not-overlap-btn-all">Tümü</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="fet-not-overlap-btn-clear">Temizle</button>
+</div>
+<div class="d-flex gap-2 mb-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="fet-not-overlap-btn-right">&gt;</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="fet-not-overlap-btn-left">&lt;</button>
+</div>
+<div class="mb-2">
+    <label>Weight percentage (recommended: 95.0% - 100.0%, allowed: 0.0% - 100.0%)</label>
+    <input type="number" class="form-control" id="fet-not-overlap-weight" min="0" max="100" value="95">
+</div>
+`;
+                Swal.fire({
+                    title: 'Etkinlikler Çakışmasın',
+                    html: html,
+                    width: '900px',
+                    showCancelButton: true,
+                    confirmButtonText: 'Kısıt Ekle',
+                    cancelButtonText: 'Kapat',
+                    didOpen: () => {
+                        const list = document.getElementById('fet-not-overlap-activity-list');
+                        const sel = document.getElementById('fet-not-overlap-activity-selected');
+                        document.getElementById('fet-not-overlap-btn-all').onclick = function() {
+                            sel.innerHTML = list.innerHTML;
+                        };
+                        document.getElementById('fet-not-overlap-btn-clear').onclick = function() {
+                            sel.innerHTML = '';
+                        };
+                        document.getElementById('fet-not-overlap-btn-right').onclick = function() {
+                            Array.from(list.selectedOptions).forEach(opt => {
+                                if (![...sel.options].some(o => o.value === opt.value)) {
+                                    let newOpt = opt.cloneNode(true);
+                                    sel.appendChild(newOpt);
+                                }
+                            });
+                        };
+                        document.getElementById('fet-not-overlap-btn-left').onclick = function() {
+                            Array.from(sel.selectedOptions).forEach(opt => sel.removeChild(opt));
+                        };
+                    },
+                    preConfirm: () => {
+                        const sel = document.getElementById('fet-not-overlap-activity-selected');
+                        const selectedIds = Array.from(sel.options).map(o => parseInt(o.value)).filter(Boolean);
+                        const weight = parseFloat(document.getElementById('fet-not-overlap-weight').value);
+                        if (!selectedIds.length) {
+                            Swal.showValidationMessage('En az bir etkinlik seçmelisiniz');
+                            return false;
+                        }
+                        if (isNaN(weight) || weight < 0 || weight > 100) {
+                            Swal.showValidationMessage('Ağırlık yüzdesi 0-100 arası olmalı');
+                            return false;
+                        }
+                        return {
+                            Type: constraintType,
+                            Activity_Ids: selectedIds,
+                            WeightPercentage: weight,
+                            Active: true
+                        };
+                    }
+                }).then(result => {
+                    if (result.isConfirmed && result.value) {
+                        fetch('/Home/AddOrUpdateTimeConstraint', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(result.value)
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                Swal.fire('Başarılı', 'Kısıt başarıyla kaydedildi', 'success');
+                                if (data.xmlContent) {
+                                    window.fetCurrentXmlContent = data.xmlContent;
+                                }
+                            } else {
+                                Swal.fire('Hata', data.message || 'Kısıt kaydedilemedi', 'error');
+                            }
+                        })
+                        .catch(err => {
+                            Swal.fire('Sunucu Hatası', 'Kısıt kaydedilemedi: ' + err.message, 'error');
+                        });
+                    }
+                });
+            });
+        return;
+    }
+
+    const constraintConfig = {
+        'ConstraintBasicCompulsoryTime': {
+            title: 'Temel Zorunlu Zaman Kısıtı',
+            fields: []
+        },
+        'ConstraintStudentsMaxHoursDaily': {
+            title: 'Öğrenciler Günlük Maksimum Saat',
+            fields: [
+                { name: 'Students', label: 'Öğrenci Grubu', type: 'text', placeholder: 'Örn: 9A, 10B' },
+                { name: 'Maximum_Hours_Daily', label: 'Günlük Maksimum Saat', type: 'number', placeholder: '6' }
+            ]
+        },
+        'ConstraintStudentsMaxHoursContinuously': {
+            title: 'Öğrenciler Aralıksız Maksimum Saat',
+            fields: [
+                { name: 'Students', label: 'Öğrenci Grubu', type: 'text', placeholder: 'Örn: 9A, 10B' },
+                { name: 'Maximum_Hours_Continuously', label: 'Aralıksız Maksimum Saat', type: 'number', placeholder: '3' }
+            ]
+        },
+        'ConstraintMinDaysBetweenActivities': {
+            title: 'Etkinlikler Arası Minimum Gün',
+            fields: [
+                { name: 'Activity_Id', label: 'Etkinlik ID\'leri (virgülle ayır)', type: 'text', placeholder: '1,2,3' },
+                { name: 'MinDays', label: 'Minimum Gün Sayısı', type: 'number', placeholder: '1' }
+            ]
+        },
+        'ConstraintBreakTimes': {
+            title: 'Kapatılacak Zaman Bloğu',
+            fields: [
+                { name: 'Break_Times', label: 'Kapatılacak Zaman Bloğu', type: 'text', placeholder: 'Pazartesi-3,Salı-5' }
+            ]
+        },
+        'ConstraintActivityPreferredTimeSlots': {
+            title: 'Etkinlik Tercihli Zaman Slotları',
+            fields: [
+                { name: 'Activity_Id', label: 'Etkinlik ID', type: 'number', placeholder: '1' },
+                { name: 'Preferred_Time_Slots', label: 'Tercihli Zaman Slotları', type: 'text', placeholder: 'Pazartesi-2,Salı-3' }
+            ]
+        },
+        'ConstraintActivitiesNotOverlapping': {
+            title: 'Etkinlikler Çakışmasın',
+            fields: [
+                { name: 'Activity_Id', label: 'Etkinlik ID\'leri (virgülle ayır)', type: 'text', placeholder: '1,2,3' }
+            ]
+        }
+    };
+
+    const config = constraintConfig[constraintType];
+    if (!config) {
+        Swal.fire('Hata', 'Geçersiz kısıt türü', 'error');
+        return;
+    }
+
+    // Generate form HTML
+    let formHtml = `
+        <div class="mb-3">
+            <label class="form-label">Ağırlık (%)</label>
+            <input type="number" class="form-control" id="constraint-weight" value="100" min="1" max="100">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Aktif</label>
+            <select class="form-select" id="constraint-active">
+                <option value="true">Evet</option>
+                <option value="false">Hayır</option>
+            </select>
+        </div>
+    `;
+
+    // Add specific fields for this constraint type
+    config.fields.forEach(field => {
+        formHtml += `
+            <div class="mb-3">
+                <label class="form-label">${field.label}</label>
+                <input type="${field.type}" class="form-control" id="constraint-${field.name}" placeholder="${field.placeholder || ''}">
+            </div>
+        `;
+    });
+
+    formHtml += `
+        <div class="mb-3">
+            <label class="form-label">Açıklama</label>
+            <textarea class="form-control" id="constraint-comments" rows="2"></textarea>
+        </div>
+    `;
+
+    Swal.fire({
+        title: config.title,
+        html: formHtml,
+        width: '600px',
+        showCancelButton: true,
+        confirmButtonText: 'Kaydet',
+        cancelButtonText: 'İptal',
+        preConfirm: () => {
+            // Get form values
+            const constraintData = {
+                Type: constraintType,
+                WeightPercentage: parseFloat(document.getElementById('constraint-weight').value) || 100,
+                Active: document.getElementById('constraint-active').value === 'true',
+                Comments: document.getElementById('constraint-comments').value || ''
+            };
+
+            // Get specific field values
+            config.fields.forEach(field => {
+                const element = document.getElementById(`constraint-${field.name}`);
+                if (element) {
+                    if (field.type === 'number') {
+                        constraintData[field.name] = parseInt(element.value) || 0;
+                    } else if (field.name === 'Activity_Id' && constraintType !== 'ConstraintActivityPreferredTimeSlots') {
+                        // Multiple activity IDs (comma separated)
+                        constraintData[field.name] = element.value.split(',').map(x => parseInt(x.trim())).filter(x => !isNaN(x));
+                    } else if (field.name === 'Activity_Id' && constraintType === 'ConstraintActivityPreferredTimeSlots') {
+                        // Single activity ID
+                        constraintData[field.name] = parseInt(element.value) || 0;
+                    } else if (field.name === 'Break_Times') {
+                        // Parse break times: "Pazartesi-3,Salı-5" format
+                        constraintData[field.name] = element.value.split(',').map(x => {
+                            const [day, hour] = x.split('-');
+                            return { Day: day.trim(), Hour: parseInt(hour) };
+                        }).filter(x => x.Day && !isNaN(x.Hour));
+                    } else if (field.name === 'Preferred_Time_Slots') {
+                        // Parse preferred time slots: "Pazartesi-2,Salı-3" format
+                        constraintData[field.name] = element.value.split(',').map(x => {
+                            const [day, hour] = x.split('-');
+                            return { Day: day.trim(), Hour: parseInt(hour) };
+                        }).filter(x => x.Day && !isNaN(x.Hour));
+                    } else {
+                        constraintData[field.name] = element.value;
+                    }
+                }
+            });
+
+            return constraintData;
+        }
+    }).then(result => {
+        if (result.isConfirmed && result.value) {
+            // Send constraint data to server
+            fetch('/Home/AddOrUpdateTimeConstraint', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(result.value)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire('Başarılı', 'Kısıt başarıyla kaydedildi', 'success');
+                    // Update the XML content if provided
+                    if (data.xmlContent) {
+                        window.fetCurrentXmlContent = data.xmlContent;
+                        window.saveToLocal();
+                    }
+                } else {
+                    Swal.fire('Hata', data.message || 'Kısıt kaydedilemedi', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire('Hata', 'Bir hata oluştu', 'error');
+            });
+        }
+    });
 };
 </script>
 

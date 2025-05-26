@@ -59,4 +59,87 @@ namespace Fet_Deneme.Models
         [XmlElement("Name")]
         public string? Name { get; set; }
     }
+
+    // Constraint: Activity Preferred Time Slots
+    [Serializable]
+    public class ConstraintActivityPreferredTimeSlots
+    {
+        [XmlElement("Weight_Percentage")] public int WeightPercentage { get; set; } = 100;
+        [XmlElement("Activity_Id")] public int ActivityId { get; set; }
+        [XmlArray("Preferred_Starting_Times")]
+        [XmlArrayItem("Preferred_Starting_Time")]
+        public List<PreferredStartingTime>? PreferredStartingTimes { get; set; }
+        [XmlElement("Active")] public bool Active { get; set; } = true;
+        [XmlElement("Comments")] public string? Comments { get; set; }
+    }
+    [Serializable]
+    public class PreferredStartingTime
+    {
+        [XmlElement("Day")] public string? Day { get; set; }
+        [XmlElement("Hour")] public string? Hour { get; set; }
+    }
+
+    // Constraint: Students Max Hours Daily
+    [Serializable]
+    public class ConstraintStudentsMaxHoursDaily
+    {
+        [XmlElement("Weight_Percentage")] public int WeightPercentage { get; set; } = 100;
+        [XmlElement("Maximum_Hours_Daily")] public int MaximumHoursDaily { get; set; }
+        [XmlElement("Active")] public bool Active { get; set; } = true;
+        [XmlElement("Comments")] public string? Comments { get; set; }
+    }
+
+    // Constraint: Students Max Hours Continuously
+    [Serializable]
+    public class ConstraintStudentsMaxHoursContinuously
+    {
+        [XmlElement("Weight_Percentage")] public int WeightPercentage { get; set; } = 100;
+        [XmlElement("Maximum_Hours_Continuously")] public int MaximumHoursContinuously { get; set; }
+        [XmlElement("Active")] public bool Active { get; set; } = true;
+        [XmlElement("Comments")] public string? Comments { get; set; }
+    }
+
+    // Constraint: Min Days Between Activities
+    [Serializable]
+    public class ConstraintMinDaysBetweenActivities
+    {
+        [XmlElement("Weight_Percentage")] public int WeightPercentage { get; set; } = 100;
+        [XmlElement("Consecutive_If_Same_Day")] public bool ConsecutiveIfSameDay { get; set; } = false;
+        [XmlElement("Number_of_Activities")] public int NumberOfActivities { get; set; }
+        [XmlElement("Activity_Id")]
+        public List<int>? ActivityIds { get; set; }
+        [XmlElement("MinDays")] public int MinDays { get; set; }
+        [XmlElement("Active")] public bool Active { get; set; } = true;
+        [XmlElement("Comments")] public string? Comments { get; set; }
+    }
+
+    // Constraint: Activities Not Overlapping
+    [Serializable]
+    public class ConstraintActivitiesNotOverlapping
+    {
+        [XmlElement("Weight_Percentage")] public int WeightPercentage { get; set; } = 100;
+        [XmlElement("Number_of_Activities")] public int NumberOfActivities { get; set; }
+        [XmlElement("Activity_Id")]
+        public List<int>? ActivityIds { get; set; }
+        [XmlElement("Active")] public bool Active { get; set; } = true;
+        [XmlElement("Comments")] public string? Comments { get; set; }
+    }
+
+    // Constraint: Break Times
+    [Serializable]
+    public class ConstraintBreakTimes
+    {
+        [XmlElement("Weight_Percentage")] public int WeightPercentage { get; set; } = 100;
+        [XmlElement("Number_of_Break_Times")] public int NumberOfBreakTimes { get; set; }
+        [XmlElement("Break_Time")]
+        public List<BreakTime>? BreakTimes { get; set; }
+        [XmlElement("Active")] public bool Active { get; set; } = true;
+        [XmlElement("Comments")] public string? Comments { get; set; }
+    }
+    [Serializable]
+    public class BreakTime
+    {
+        [XmlElement("Day")] public string? Day { get; set; }
+        [XmlElement("Hour")] public string? Hour { get; set; }
+    }
 }
