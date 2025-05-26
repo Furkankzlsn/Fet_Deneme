@@ -27,54 +27,30 @@
     </Day>
   </Days_List>
   <Hours_List>
-    <Number_of_Hours>12</Number_of_Hours>
+    <Number_of_Hours>6</Number_of_Hours>
     <Hour>
       <Name>H1</Name>
-      <Long_Name>08:00</Long_Name>
+      <Long_Name>Hour 1</Long_Name>
     </Hour>
     <Hour>
       <Name>H2</Name>
-      <Long_Name>09:00</Long_Name>
+      <Long_Name>Hour 2</Long_Name>
     </Hour>
     <Hour>
       <Name>H3</Name>
-      <Long_Name>10:00</Long_Name>
+      <Long_Name>Hour 3</Long_Name>
     </Hour>
     <Hour>
       <Name>H4</Name>
-      <Long_Name>11:00</Long_Name>
+      <Long_Name>Hour 4</Long_Name>
     </Hour>
     <Hour>
       <Name>H5</Name>
-      <Long_Name>12:00</Long_Name>
+      <Long_Name>Hour 5</Long_Name>
     </Hour>
     <Hour>
       <Name>H6</Name>
-      <Long_Name>13:00</Long_Name>
-    </Hour>
-    <Hour>
-      <Name>H7</Name>
-      <Long_Name>14:00</Long_Name>
-    </Hour>
-    <Hour>
-      <Name>H8</Name>
-      <Long_Name>15:00</Long_Name>
-    </Hour>
-    <Hour>
-      <Name>H9</Name>
-      <Long_Name>16:00</Long_Name>
-    </Hour>
-    <Hour>
-      <Name>H10</Name>
-      <Long_Name>17:00</Long_Name>
-    </Hour>
-    <Hour>
-      <Name>H11</Name>
-      <Long_Name>18:00</Long_Name>
-    </Hour>
-    <Hour>
-      <Name>H12</Name>
-      <Long_Name>19:00</Long_Name>
+      <Long_Name>Hour 6</Long_Name>
     </Hour>
   </Hours_List>
   <Subjects_List>

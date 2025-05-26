@@ -54,7 +54,7 @@
                                     </ul>
                                 </li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item text-danger" href="#" onclick="window.close()">Çıkış</a></li>
+                                <li class="dropdown-item text-danger" href="#" onclick="window.close()">Çıkış</li>
                             </ul>
                         </li>                        <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="fetVeriDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Veri</a>
@@ -63,6 +63,15 @@
                                 <li><a class="dropdown-item" href="#" onclick="window.fetShowData('teachers')">Öğretmenler</a></li>
                                 <li><a class="dropdown-item" href="#" onclick="window.fetShowData('students')">Öğrenciler</a></li>
                                 <li><a class="dropdown-item" href="#" onclick="window.fetShowData('activities')">Etkinlikler</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li class="dropdown-submenu dropend">
+                                    <a class="dropdown-item dropdown-toggle" href="#" id="fetGunSaatDropdown" data-bs-toggle="dropdown" aria-expanded="false">Gün/Saat</a>
+                                    <ul class="dropdown-menu" aria-labelledby="fetGunSaatDropdown">
+                                        <li><a class="dropdown-item" href="#" onclick="window.fetShowDaysHours()">Gün/Saat Yönetimi</a></li>
+                                        <li><a class="dropdown-item" href="#" onclick="window.fetShowDays()">Gün</a></li>
+                                        <li><a class="dropdown-item" href="#" onclick="window.fetShowHours()">Saat</a></li>
+                                    </ul>
+                                </li>
                             </ul>
                         </li>
                         <li class="nav-item"><a class="nav-link" href="#">İstatistikler</a></li>

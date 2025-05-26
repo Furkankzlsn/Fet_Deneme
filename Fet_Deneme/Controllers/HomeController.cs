@@ -767,23 +767,108 @@ namespace Fet_Deneme.Controllers
                         
                     case "activities":
                         var activityNodes = xml.SelectNodes("//fet/Activities_List/Activity");
+                        // Build a mapping of all student sets (years, groups, subgroups) to their student counts
+                        var studentCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                        var yearNodesAll = xml.SelectNodes("//fet/Students_List/Year");
+                        if (yearNodesAll != null)
+                        {
+                            foreach (System.Xml.XmlNode yearNode in yearNodesAll)
+                            {
+                                var yearName = yearNode.SelectSingleNode("Name")?.InnerText?.Trim();
+                                int yearCount = int.TryParse(yearNode.SelectSingleNode("Number_of_Students")?.InnerText, out int y) ? y : 0;
+                                if (!string.IsNullOrEmpty(yearName)) studentCounts[yearName] = yearCount;
+                                var groupNodes = yearNode.SelectNodes("Group");
+                                if (groupNodes != null)
+                                {
+                                    foreach (System.Xml.XmlNode groupNode in groupNodes)
+                                    {
+                                        var groupName = groupNode.SelectSingleNode("Name")?.InnerText?.Trim();
+                                        int groupCount = int.TryParse(groupNode.SelectSingleNode("Number_of_Students")?.InnerText, out int g) ? g : 0;
+                                        if (!string.IsNullOrEmpty(groupName)) studentCounts[groupName] = groupCount;
+                                        var subgroupNodes = groupNode.SelectNodes("Subgroup");
+                                        if (subgroupNodes != null)
+                                        {
+                                            foreach (System.Xml.XmlNode subgroupNode in subgroupNodes)
+                                            {
+                                                var subgroupName = subgroupNode.SelectSingleNode("Name")?.InnerText?.Trim();
+                                                int subgroupCount = int.TryParse(subgroupNode.SelectSingleNode("Number_of_Students")?.InnerText, out int s) ? s : 0;
+                                                if (!string.IsNullOrEmpty(subgroupName)) studentCounts[subgroupName] = subgroupCount;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         if (activityNodes != null)
                         {
                             foreach (System.Xml.XmlNode node in activityNodes)
-                            {                                dataList.Add(new ActivityModel {
+                            {
+                                // FET format: multiple <Students> tags per activity
+                                int totalCount = 0;
+                                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // Avoid double-counting
+                                var studentNodes = node.SelectNodes("Students");
+                                string studentsRaw = "";
+                                int studentSetCount = 0;
+                                if (studentNodes != null)
+                                {
+                                    foreach (System.Xml.XmlNode stNode in studentNodes)
+                                    {
+                                        var stName = stNode.InnerText?.Trim();
+                                        if (!string.IsNullOrEmpty(stName))
+                                        {
+                                            studentsRaw += (studentsRaw.Length > 0 ? ", " : "") + stName;
+                                            if (!seen.Contains(stName))
+                                            {
+                                                seen.Add(stName);
+                                                if (studentCounts.TryGetValue(stName, out int cnt))
+                                                    totalCount += cnt;
+                                                studentSetCount++;
+                                            }
+                                        }
+                                    }
+                                }
+                                // Eğer toplam öğrenci sayısı 0 ise, öğrenci seti adedini göster
+                                int displayCount = totalCount > 0 ? totalCount : studentSetCount;
+                                dataList.Add(new {
                                     Teacher = node.SelectSingleNode("Teacher")?.InnerText,
                                     Subject = node.SelectSingleNode("Subject")?.InnerText,
-                                    Students = node.SelectSingleNode("Students")?.InnerText,
+                                    Students = studentsRaw,
+                                    StudentCount = displayCount,
                                     Duration = int.TryParse(node.SelectSingleNode("Duration")?.InnerText, out int duration) ? duration : 0,
                                     TotalDuration = int.TryParse(node.SelectSingleNode("Total_Duration")?.InnerText, out int totalDuration) ? totalDuration : 0,
                                     Id = int.TryParse(node.SelectSingleNode("Id")?.InnerText, out int id) ? id : 0,
                                     ActivityGroupId = int.TryParse(node.SelectSingleNode("Activity_Group_Id")?.InnerText, out int groupId) ? groupId : 0,
-                                    Active = node.SelectSingleNode("Active")?.InnerText.ToLower() == "true",
+                                    Active = node.SelectSingleNode("Active")?.InnerText?.ToLower() == "true",
                                     Comments = node.SelectSingleNode("Comments")?.InnerText
                                 });
                             }
                         }
                         break;
+                        
+                    case "days":
+    var dayNodes = xml.SelectNodes("//fet/Days_List/Day");
+    if (dayNodes != null)
+    {
+        foreach (System.Xml.XmlNode node in dayNodes)
+        {
+            var name = node.SelectSingleNode("Name")?.InnerText;
+            var longName = node.SelectSingleNode("Long_Name")?.InnerText;
+            dataList.Add(new { name = name, longName = longName });
+        }
+    }
+    break;
+case "hours":
+    var hourNodes = xml.SelectNodes("//fet/Hours_List/Hour");
+    if (hourNodes != null)
+    {
+        foreach (System.Xml.XmlNode node in hourNodes)
+        {
+            var name = node.SelectSingleNode("Name")?.InnerText;
+            var longName = node.SelectSingleNode("Long_Name")?.InnerText;
+            dataList.Add(new { name = name, longName = longName });
+        }
+    }
+    break;
                         
                     default:
                         return Json(new { success = false, message = "Geçersiz veri tipi" });
@@ -794,6 +879,290 @@ namespace Fet_Deneme.Controllers
             catch (Exception ex)
             {
                 return Json(new { success = false, message = "XML işleme hatası: " + ex.Message });
+            }
+        }
+
+        // --- Day/Hour CRUD Models ---
+        public class DayHourRequest
+        {
+            public int? Index { get; set; } // For edit/delete
+            public string? Name { get; set; }
+            public string? LongName { get; set; }
+        }
+
+        // --- Day CRUD ---
+        [HttpPost]
+        public JsonResult AddDay([FromBody] DayHourRequest req)
+        {
+            if (string.IsNullOrEmpty(CurrentXmlContent))
+                return Json(new { success = false, message = "Önce bir proje açın veya oluşturun." });
+            try
+            {
+                var doc = new System.Xml.XmlDocument();
+                doc.LoadXml(CurrentXmlContent);
+                var daysList = doc.SelectSingleNode("/fet/Days_List");
+                if (daysList == null)
+                    return Json(new { success = false, message = "XML'de Days_List bulunamadı." });
+                var dayNode = doc.CreateElement("Day");
+                var nameNode = doc.CreateElement("Name");
+                nameNode.InnerText = req.Name ?? "";
+                var longNameNode = doc.CreateElement("Long_Name");
+                longNameNode.InnerText = req.LongName ?? req.Name ?? "";
+                dayNode.AppendChild(nameNode);
+                dayNode.AppendChild(longNameNode);
+                daysList.AppendChild(dayNode);
+                // Update number of days
+                var numDaysNode = daysList.SelectSingleNode("Number_of_Days");
+                if (numDaysNode != null)
+                {
+                    var dayNodes = daysList.SelectNodes("Day");
+                    int n = dayNodes != null ? dayNodes.Count : 0;
+                    numDaysNode.InnerText = n.ToString();
+                }
+                using (var sw = new System.IO.StringWriter())
+                using (var xw = new System.Xml.XmlTextWriter(sw))
+                {
+                    xw.Formatting = System.Xml.Formatting.Indented;
+                    doc.WriteTo(xw);
+                    xw.Flush();
+                    CurrentXmlContent = sw.ToString();
+                }
+                if (!string.IsNullOrEmpty(CurrentFilePath))
+                    System.IO.File.WriteAllText(CurrentFilePath, CurrentXmlContent);
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public JsonResult EditDay([FromBody] DayHourRequest req)
+        {
+            if (string.IsNullOrEmpty(CurrentXmlContent))
+                return Json(new { success = false, message = "Önce bir proje açın veya oluşturun." });
+            if (req.Index == null)
+                return Json(new { success = false, message = "Index gerekli." });
+            try
+            {
+                var doc = new System.Xml.XmlDocument();
+                doc.LoadXml(CurrentXmlContent);
+                var daysList = doc.SelectSingleNode("/fet/Days_List");
+                if (daysList == null)
+                    return Json(new { success = false, message = "XML'de Days_List bulunamadı." });
+                var dayNodes = daysList.SelectNodes("Day");
+                if (dayNodes == null || req.Index < 0 || req.Index >= dayNodes.Count)
+                    return Json(new { success = false, message = "Geçersiz index." });
+                var dayNode = dayNodes[req.Index.Value];
+                if (dayNode != null)
+                {
+                    var nameNode = dayNode.SelectSingleNode("Name");
+                    var longNameNode = dayNode.SelectSingleNode("Long_Name");
+                    if (nameNode != null)
+                        nameNode.InnerText = req.Name ?? "";
+                    if (longNameNode != null)
+                        longNameNode.InnerText = req.LongName ?? req.Name ?? "";
+                }
+                using (var sw = new System.IO.StringWriter())
+                using (var xw = new System.Xml.XmlTextWriter(sw))
+                {
+                    xw.Formatting = System.Xml.Formatting.Indented;
+                    doc.WriteTo(xw);
+                    xw.Flush();
+                    CurrentXmlContent = sw.ToString();
+                }
+                if (!string.IsNullOrEmpty(CurrentFilePath))
+                    System.IO.File.WriteAllText(CurrentFilePath, CurrentXmlContent);
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public JsonResult DeleteDay([FromBody] DayHourRequest req)
+        {
+            if (string.IsNullOrEmpty(CurrentXmlContent))
+                return Json(new { success = false, message = "Önce bir proje açın veya oluşturun." });
+            if (req.Index == null)
+                return Json(new { success = false, message = "Index gerekli." });
+            try
+            {
+                var doc = new System.Xml.XmlDocument();
+                doc.LoadXml(CurrentXmlContent);
+                var daysList = doc.SelectSingleNode("/fet/Days_List");
+                if (daysList == null)
+                    return Json(new { success = false, message = "XML'de Days_List bulunamadı." });
+                var dayNodes = daysList.SelectNodes("Day");
+                if (dayNodes == null || req.Index < 0 || req.Index >= dayNodes.Count)
+                    return Json(new { success = false, message = "Geçersiz index." });
+                var dayNode = dayNodes[req.Index.Value];
+                if (dayNode != null)
+                    daysList.RemoveChild(dayNode);
+                // Update number of days
+                var numDaysNode = daysList.SelectSingleNode("Number_of_Days");
+                if (numDaysNode != null)
+                {
+                    var newDayNodes = daysList.SelectNodes("Day");
+                    int n = newDayNodes != null ? newDayNodes.Count : 0;
+                    numDaysNode.InnerText = n.ToString();
+                }
+                using (var sw = new System.IO.StringWriter())
+                using (var xw = new System.Xml.XmlTextWriter(sw))
+                {
+                    xw.Formatting = System.Xml.Formatting.Indented;
+                    doc.WriteTo(xw);
+                    xw.Flush();
+                    CurrentXmlContent = sw.ToString();
+                }
+                if (!string.IsNullOrEmpty(CurrentFilePath))
+                    System.IO.File.WriteAllText(CurrentFilePath, CurrentXmlContent);
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        // --- Hour CRUD ---
+        [HttpPost]
+        public JsonResult AddHour([FromBody] DayHourRequest req)
+        {
+            if (string.IsNullOrEmpty(CurrentXmlContent))
+                return Json(new { success = false, message = "Önce bir proje açın veya oluşturun." });
+            try
+            {
+                var doc = new System.Xml.XmlDocument();
+                doc.LoadXml(CurrentXmlContent);
+                var hoursList = doc.SelectSingleNode("/fet/Hours_List");
+                if (hoursList == null)
+                    return Json(new { success = false, message = "XML'de Hours_List bulunamadı." });
+                var hourNode = doc.CreateElement("Hour");
+                var nameNode = doc.CreateElement("Name");
+                nameNode.InnerText = req.Name ?? "";
+                var longNameNode = doc.CreateElement("Long_Name");
+                longNameNode.InnerText = req.LongName ?? req.Name ?? "";
+                hourNode.AppendChild(nameNode);
+                hourNode.AppendChild(longNameNode);
+                hoursList.AppendChild(hourNode);
+                // Update number of hours
+                var numHoursNode = hoursList.SelectSingleNode("Number_of_Hours");
+                if (numHoursNode != null)
+                {
+                    var hourNodes = hoursList.SelectNodes("Hour");
+                    int n = hourNodes != null ? hourNodes.Count : 0;
+                    numHoursNode.InnerText = n.ToString();
+                }
+                using (var sw = new System.IO.StringWriter())
+                using (var xw = new System.Xml.XmlTextWriter(sw))
+                {
+                    xw.Formatting = System.Xml.Formatting.Indented;
+                    doc.WriteTo(xw);
+                    xw.Flush();
+                    CurrentXmlContent = sw.ToString();
+                }
+                if (!string.IsNullOrEmpty(CurrentFilePath))
+                    System.IO.File.WriteAllText(CurrentFilePath, CurrentXmlContent);
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public JsonResult EditHour([FromBody] DayHourRequest req)
+        {
+            if (string.IsNullOrEmpty(CurrentXmlContent))
+                return Json(new { success = false, message = "Önce bir proje açın veya oluşturun." });
+            if (req.Index == null)
+                return Json(new { success = false, message = "Index gerekli." });
+            try
+            {
+                var doc = new System.Xml.XmlDocument();
+                doc.LoadXml(CurrentXmlContent);
+                var hoursList = doc.SelectSingleNode("/fet/Hours_List");
+                if (hoursList == null)
+                    return Json(new { success = false, message = "XML'de Hours_List bulunamadı." });
+                var hourNodes = hoursList.SelectNodes("Hour");
+                if (hourNodes == null || req.Index < 0 || req.Index >= hourNodes.Count)
+                    return Json(new { success = false, message = "Geçersiz index." });
+                var hourNode = hourNodes[req.Index.Value];
+                if (hourNode != null)
+                {
+                    var nameNode = hourNode.SelectSingleNode("Name");
+                    var longNameNode = hourNode.SelectSingleNode("Long_Name");
+                    if (nameNode != null)
+                        nameNode.InnerText = req.Name ?? "";
+                    if (longNameNode != null)
+                        longNameNode.InnerText = req.LongName ?? req.Name ?? "";
+                }
+                using (var sw = new System.IO.StringWriter())
+                using (var xw = new System.Xml.XmlTextWriter(sw))
+                {
+                    xw.Formatting = System.Xml.Formatting.Indented;
+                    doc.WriteTo(xw);
+                    xw.Flush();
+                    CurrentXmlContent = sw.ToString();
+                }
+                if (!string.IsNullOrEmpty(CurrentFilePath))
+                    System.IO.File.WriteAllText(CurrentFilePath, CurrentXmlContent);
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public JsonResult DeleteHour([FromBody] DayHourRequest req)
+        {
+            if (string.IsNullOrEmpty(CurrentXmlContent))
+                return Json(new { success = false, message = "Önce bir proje açın veya oluşturun." });
+            if (req.Index == null)
+                return Json(new { success = false, message = "Index gerekli." });
+            try
+            {
+                var doc = new System.Xml.XmlDocument();
+                doc.LoadXml(CurrentXmlContent);
+                var hoursList = doc.SelectSingleNode("/fet/Hours_List");
+                if (hoursList == null)
+                    return Json(new { success = false, message = "XML'de Hours_List bulunamadı." });
+                var hourNodes = hoursList.SelectNodes("Hour");
+                if (hourNodes == null || req.Index < 0 || req.Index >= hourNodes.Count)
+                    return Json(new { success = false, message = "Geçersiz index." });
+                var hourNode = hourNodes[req.Index.Value];
+                if (hourNode != null)
+                    hoursList.RemoveChild(hourNode);
+                // Update number of hours
+                var numHoursNode = hoursList.SelectSingleNode("Number_of_Hours");
+                if (numHoursNode != null)
+                {
+                    var newHourNodes = hoursList.SelectNodes("Hour");
+                    int n = newHourNodes != null ? newHourNodes.Count : 0;
+                    numHoursNode.InnerText = n.ToString();
+                }
+                using (var sw = new System.IO.StringWriter())
+                using (var xw = new System.Xml.XmlTextWriter(sw))
+                {
+                    xw.Formatting = System.Xml.Formatting.Indented;
+                    doc.WriteTo(xw);
+                    xw.Flush();
+                    CurrentXmlContent = sw.ToString();
+                }
+                if (!string.IsNullOrEmpty(CurrentFilePath))
+                    System.IO.File.WriteAllText(CurrentFilePath, CurrentXmlContent);
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
             }
         }
 
