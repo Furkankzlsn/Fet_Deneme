@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.IO;
 using Fet_Deneme.Models;
 using ActivityModel = Fet_Deneme.Models.Activity;
+using System.Text.Json;
 
 namespace Fet_Deneme.Controllers
 {
@@ -1205,22 +1206,28 @@ case "hours":
                 switch (req.Type)
                 {
                     case "ConstraintActivityPreferredTimeSlots":
-                        newConstraint = CreateConstraintActivityPreferredTimeSlots(doc, req.Data);
+                        var model1 = ConvertData<ConstraintActivityPreferredTimeSlotsModel>(req.Data);
+                        newConstraint = CreateConstraintActivityPreferredTimeSlots(doc, model1);
                         break;
                     case "ConstraintStudentsMaxHoursDaily":
-                        newConstraint = CreateConstraintStudentsMaxHoursDaily(doc, req.Data);
+                        var model2 = ConvertData<ConstraintStudentsMaxHoursDailyModel>(req.Data);
+                        newConstraint = CreateConstraintStudentsMaxHoursDaily(doc, model2);
                         break;
                     case "ConstraintStudentsMaxHoursContinuously":
-                        newConstraint = CreateConstraintStudentsMaxHoursContinuously(doc, req.Data);
+                        var model3 = ConvertData<ConstraintStudentsMaxHoursContinuouslyModel>(req.Data);
+                        newConstraint = CreateConstraintStudentsMaxHoursContinuously(doc, model3);
                         break;
                     case "ConstraintMinDaysBetweenActivities":
-                        newConstraint = CreateConstraintMinDaysBetweenActivities(doc, req.Data);
+                        var model4 = ConvertData<ConstraintMinDaysBetweenActivitiesModel>(req.Data);
+                        newConstraint = CreateConstraintMinDaysBetweenActivities(doc, model4);
                         break;
                     case "ConstraintActivitiesNotOverlapping":
-                        newConstraint = CreateConstraintActivitiesNotOverlapping(doc, req.Data);
+                        var model5 = ConvertData<ConstraintActivitiesNotOverlappingModel>(req.Data);
+                        newConstraint = CreateConstraintActivitiesNotOverlapping(doc, model5);
                         break;
                     case "ConstraintBreakTimes":
-                        newConstraint = CreateConstraintBreakTimes(doc, req.Data);
+                        var model6 = ConvertData<ConstraintBreakTimesModel>(req.Data);
+                        newConstraint = CreateConstraintBreakTimes(doc, model6);
                         break;
                     default:
                         return Json(new { success = false, message = "Unknown constraint type." });
@@ -1254,24 +1261,21 @@ case "hours":
         }
 
         // Helper methods for each constraint type
-        private System.Xml.XmlElement CreateConstraintActivityPreferredTimeSlots(System.Xml.XmlDocument doc, dynamic data)
+        private System.Xml.XmlElement CreateConstraintActivityPreferredTimeSlots(System.Xml.XmlDocument doc, ConstraintActivityPreferredTimeSlotsModel data)
         {
             var node = doc.CreateElement("ConstraintActivityPreferredTimeSlots");
-            node.AppendChild(CreateTextElement(doc, "Weight_Percentage", data.WeightPercentage?.ToString() ?? "100"));
+            node.AppendChild(CreateTextElement(doc, "Weight_Percentage", data.WeightPercentage.ToString()));
             node.AppendChild(CreateTextElement(doc, "Activity_Id", data.ActivityId.ToString()));
-            var prefTimes = doc.CreateElement("Preferred_Starting_Times");
-            if (data.PreferredStartingTimes != null)
+            var slots = data.PreferredTimeSlots ?? new List<PreferredTimeSlot>();
+            node.AppendChild(CreateTextElement(doc, "Number_of_Preferred_Time_Slots", slots.Count.ToString()));
+            foreach (var t in slots)
             {
-                foreach (var t in data.PreferredStartingTimes)
-                {
-                    var pref = doc.CreateElement("Preferred_Starting_Time");
-                    pref.AppendChild(CreateTextElement(doc, "Day", t.Day));
-                    pref.AppendChild(CreateTextElement(doc, "Hour", t.Hour));
-                    prefTimes.AppendChild(pref);
-                }
+                var slot = doc.CreateElement("Preferred_Time_Slot");
+                slot.AppendChild(CreateTextElement(doc, "Day", t.Day));
+                slot.AppendChild(CreateTextElement(doc, "Hour", t.Hour));
+                node.AppendChild(slot);
             }
-            node.AppendChild(prefTimes);
-            node.AppendChild(CreateTextElement(doc, "Active", (data.Active ?? true).ToString().ToLower()));
+            node.AppendChild(CreateTextElement(doc, "Active", (data.Active).ToString().ToLower()));
             node.AppendChild(CreateTextElement(doc, "Comments", data.Comments ?? ""));
             return node;
         }
@@ -1298,7 +1302,10 @@ case "hours":
             var node = doc.CreateElement("ConstraintMinDaysBetweenActivities");
             node.AppendChild(CreateTextElement(doc, "Weight_Percentage", data.WeightPercentage?.ToString() ?? "100"));
             node.AppendChild(CreateTextElement(doc, "Consecutive_If_Same_Day", (data.ConsecutiveIfSameDay ?? false).ToString().ToLower()));
-            var ids = data.ActivityIds as IEnumerable<object> ?? new List<object>();
+            // DÜZELTME: ActivityIds tipi int olmalı, object değil
+            var ids = (data.ActivityIds as IEnumerable<int>) ??
+                      (data.ActivityIds as IEnumerable<object>)?.Select(x => Convert.ToInt32(x)) ??
+                      new List<int>();
             node.AppendChild(CreateTextElement(doc, "Number_of_Activities", ids.Count().ToString()));
             foreach (var id in ids)
                 node.AppendChild(CreateTextElement(doc, "Activity_Id", id.ToString()));
@@ -1311,7 +1318,10 @@ case "hours":
         {
             var node = doc.CreateElement("ConstraintActivitiesNotOverlapping");
             node.AppendChild(CreateTextElement(doc, "Weight_Percentage", data.WeightPercentage?.ToString() ?? "100"));
-            var ids = data.ActivityIds as IEnumerable<object> ?? new List<object>();
+            // DÜZELTME: ActivityIds tipi int olmalı, object değil
+            var ids = (data.ActivityIds as IEnumerable<int>) ??
+                      (data.ActivityIds as IEnumerable<object>)?.Select(x => Convert.ToInt32(x)) ??
+                      new List<int>();
             node.AppendChild(CreateTextElement(doc, "Number_of_Activities", ids.Count().ToString()));
             foreach (var id in ids)
                 node.AppendChild(CreateTextElement(doc, "Activity_Id", id.ToString()));
@@ -1349,6 +1359,268 @@ case "hours":
         {
             var requestId = System.Diagnostics.Activity.Current?.Id ?? HttpContext.TraceIdentifier;
             return View(new ErrorViewModel { RequestId = requestId });
+        }
+
+        [HttpGet]
+        public IActionResult ListConstraints(string type)
+        {
+            if (string.IsNullOrEmpty(CurrentXmlContent))
+                return Json(new { list = new List<object>() });
+            var doc = new System.Xml.XmlDocument();
+            doc.LoadXml(CurrentXmlContent);
+            var constraintsList = doc.SelectSingleNode("/fet/Time_Constraints_List");
+            if (constraintsList == null)
+                return Json(new { list = new List<object>() });
+            var result = new List<object>();
+            foreach (System.Xml.XmlNode node in constraintsList.ChildNodes)
+            {
+                if (node.Name != type) continue;
+                // Kısa özet ve detay üret
+                string summary = GetConstraintSummary(node);
+                string details = GetConstraintDetails(node);
+                result.Add(new { summary, details });
+            }
+            return Json(new { list = result });
+        }
+
+        private string GetConstraintSummary(System.Xml.XmlNode node)
+        {
+            var type = node.Name;
+            var weight = node.SelectSingleNode("Weight_Percentage")?.InnerText ?? "";
+            var summary = type + ", AY:" + weight + "%";
+            if (type == "ConstraintActivitiesNotOverlapping" || type == "ConstraintMinDaysBetweenActivities")
+            {
+                var ids = node.SelectNodes("Activity_Id");
+                if (ids != null && ids.Count > 0)
+                {
+                    summary += ", Id:" + string.Join(", Id:", ids.Cast<System.Xml.XmlNode>().Select(x => x.InnerText));
+                }
+            }
+            if (type == "ConstraintActivityPreferredTimeSlots")
+            {
+                var id = node.SelectSingleNode("Activity_Id")?.InnerText;
+                summary += ", Id:" + id;
+            }
+            if (type == "ConstraintBreakTimes")
+            {
+                var n = node.SelectSingleNode("Number_of_Break_Times")?.InnerText;
+                summary += ", NA:" + n;
+            }
+            return summary;
+        }
+
+        private string GetConstraintDetails(System.Xml.XmlNode node)
+        {
+            // Daha okunabilir detay için başlık:değer şeklinde yaz
+            var type = node.Name;
+            var details = $"<b>Zaman kısıtı</b><br>";
+            if (type == "ConstraintActivitiesNotOverlapping")
+            {
+            details += "Dersler Ardışık Olmamalı<br>";
+            details += $"Weight (percentage)={node.SelectSingleNode("Weight_Percentage")?.InnerText ?? ""}<br>";
+            details += $"Ders sayısı={node.SelectSingleNode("Number_of_Activities")?.InnerText ?? ""}<br>";
+            var ids = node.SelectNodes("Activity_Id");
+            if (ids != null && ids.Count > 0)
+            {
+                details += "Activity with id=" + string.Join(",", ids.Cast<System.Xml.XmlNode>().Select(x => x.InnerText)) + "<br>";
+            }
+            }
+            else
+            {
+            // Tüm alt elemanları başlık:değer şeklinde sırala
+            foreach (System.Xml.XmlNode child in node.ChildNodes)
+            {
+                if (child.HasChildNodes && child.ChildNodes.Count > 1 && child.FirstChild.NodeType == System.Xml.XmlNodeType.Element)
+                {
+                // Alt elemanları listele
+                details += $"<b>{child.Name}</b>:<br>";
+                foreach (System.Xml.XmlNode sub in child.ChildNodes)
+                {
+                    details += $"&nbsp;&nbsp;{sub.Name}: {sub.InnerText}<br>";
+                }
+                }
+                else
+                {
+                details += $"{child.Name}: {child.InnerText}<br>";
+                }
+            }
+            }
+            return details;
+        }
+
+        public class EditConstraintRequest
+        {
+            public string Type { get; set; } = string.Empty;
+            public int Index { get; set; } // ListConstraints ile dönen listedeki sıra
+            public dynamic Data { get; set; } = null!;
+        }
+
+        [HttpPost]
+        public JsonResult EditConstraint([FromBody] EditConstraintRequest req)
+        {
+            if (string.IsNullOrEmpty(CurrentXmlContent))
+                return Json(new { success = false, message = "No project loaded." });
+            try
+            {
+                var doc = new System.Xml.XmlDocument();
+                doc.LoadXml(CurrentXmlContent);
+                var constraintsList = doc.SelectSingleNode("/fet/Time_Constraints_List");
+                if (constraintsList == null)
+                    return Json(new { success = false, message = "Time_Constraints_List not found in XML." });
+                // İlgili tipteki constraint'leri bul
+                var nodes = constraintsList.SelectNodes(req.Type);
+                if (nodes == null || req.Index < 0 || req.Index >= nodes.Count)
+                    return Json(new { success = false, message = "Constraint not found." });
+                var oldNode = nodes[req.Index];
+                if (oldNode == null)
+                    return Json(new { success = false, message = "Constraint node not found." });
+                // Yeni constraint node'u oluştur
+                System.Xml.XmlElement? newConstraint = null;
+                switch (req.Type)
+                {
+                    case "ConstraintActivityPreferredTimeSlots":
+                        newConstraint = CreateConstraintActivityPreferredTimeSlots(doc, req.Data);
+                        break;
+                    case "ConstraintStudentsMaxHoursDaily":
+                        newConstraint = CreateConstraintStudentsMaxHoursDaily(doc, req.Data);
+                        break;
+                    case "ConstraintStudentsMaxHoursContinuously":
+                        newConstraint = CreateConstraintStudentsMaxHoursContinuously(doc, req.Data);
+                        break;
+                    case "ConstraintMinDaysBetweenActivities":
+                        newConstraint = CreateConstraintMinDaysBetweenActivities(doc, req.Data);
+                        break;
+                    case "ConstraintActivitiesNotOverlapping":
+                        newConstraint = CreateConstraintActivitiesNotOverlapping(doc, req.Data);
+                        break;
+                    case "ConstraintBreakTimes":
+                        newConstraint = CreateConstraintBreakTimes(doc, req.Data);
+                        break;
+                    default:
+                        return Json(new { success = false, message = "Unknown constraint type." });
+                }
+                if (newConstraint == null)
+                    return Json(new { success = false, message = "Constraint could not be created." });
+                // Eski node'u yenisiyle değiştir
+                constraintsList.ReplaceChild(newConstraint, oldNode);
+                using (var sw = new System.IO.StringWriter())
+                using (var xw = new System.Xml.XmlTextWriter(sw))
+                {
+                    xw.Formatting = System.Xml.Formatting.Indented;
+                    doc.WriteTo(xw);
+                    xw.Flush();
+                    CurrentXmlContent = sw.ToString();
+                }
+                if (!string.IsNullOrEmpty(CurrentFilePath))
+                    System.IO.File.WriteAllText(CurrentFilePath, CurrentXmlContent);
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        public class DeleteConstraintRequest
+        {
+            public string Type { get; set; } = string.Empty;
+            public int Index { get; set; } // ListConstraints ile dönen listedeki sıra
+        }
+
+        [HttpPost]
+        public JsonResult DeleteConstraint([FromBody] DeleteConstraintRequest req)
+        {
+            if (string.IsNullOrEmpty(CurrentXmlContent))
+                return Json(new { success = false, message = "No project loaded." });
+            try
+            {
+                var doc = new System.Xml.XmlDocument();
+                doc.LoadXml(CurrentXmlContent);
+                var constraintsList = doc.SelectSingleNode("/fet/Time_Constraints_List");
+                if (constraintsList == null)
+                    return Json(new { success = false, message = "Time_Constraints_List not found in XML." });
+                var nodes = constraintsList.SelectNodes(req.Type);
+                if (nodes == null || req.Index < 0 || req.Index >= nodes.Count)
+                    return Json(new { success = false, message = "Constraint not found." });
+                var nodeToRemove = nodes[req.Index];
+                if (nodeToRemove == null)
+                    return Json(new { success = false, message = "Constraint node not found." });
+                constraintsList.RemoveChild(nodeToRemove);
+                using (var sw = new System.IO.StringWriter())
+                using (var xw = new System.Xml.XmlTextWriter(sw))
+                {
+                    xw.Formatting = System.Xml.Formatting.Indented;
+                    doc.WriteTo(xw);
+                    xw.Flush();
+                    CurrentXmlContent = sw.ToString();
+                }
+                if (!string.IsNullOrEmpty(CurrentFilePath))
+                    System.IO.File.WriteAllText(CurrentFilePath, CurrentXmlContent);
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        private T ConvertData<T>(object data)
+        {
+            if (data is JsonElement elem)
+                return JsonSerializer.Deserialize<T>(elem.GetRawText())!;
+            return (T)data;
+        }
+
+        public class ConstraintActivityPreferredTimeSlotsModel
+        {
+            public int WeightPercentage { get; set; }
+            public int ActivityId { get; set; }
+            public int NumberOfPreferredTimeSlots { get; set; }
+            public List<PreferredTimeSlot> PreferredTimeSlots { get; set; } = new();
+            public bool Active { get; set; }
+            public string? Comments { get; set; }
+        }
+        public class PreferredTimeSlot
+        {
+            public string Day { get; set; } = string.Empty;
+            public string Hour { get; set; } = string.Empty;
+        }
+        public class ConstraintStudentsMaxHoursDailyModel
+        {
+            public int WeightPercentage { get; set; }
+            public int MaximumHoursDaily { get; set; }
+            public bool Active { get; set; }
+            public string? Comments { get; set; }
+        }
+        public class ConstraintStudentsMaxHoursContinuouslyModel
+        {
+            public int WeightPercentage { get; set; }
+            public int MaximumHoursContinuously { get; set; }
+            public bool Active { get; set; }
+            public string? Comments { get; set; }
+        }
+        public class ConstraintMinDaysBetweenActivitiesModel
+        {
+            public int WeightPercentage { get; set; }
+            public List<int> ActivityIds { get; set; } = new();
+            public int MinDays { get; set; }
+            public bool ConsecutiveIfSameDay { get; set; }
+            public bool Active { get; set; }
+            public string? Comments { get; set; }
+        }
+        public class ConstraintActivitiesNotOverlappingModel
+        {
+            public int WeightPercentage { get; set; }
+            public List<int> ActivityIds { get; set; } = new();
+            public bool Active { get; set; }
+            public string? Comments { get; set; }
+        }
+        public class ConstraintBreakTimesModel
+        {
+            public int WeightPercentage { get; set; }
+            public List<PreferredTimeSlot> BreakTimes { get; set; } = new();
+            public bool Active { get; set; }
+            public string? Comments { get; set; }
         }
     }
 }

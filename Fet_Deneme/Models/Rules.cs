@@ -66,14 +66,14 @@ namespace Fet_Deneme.Models
     {
         [XmlElement("Weight_Percentage")] public int WeightPercentage { get; set; } = 100;
         [XmlElement("Activity_Id")] public int ActivityId { get; set; }
-        [XmlArray("Preferred_Starting_Times")]
-        [XmlArrayItem("Preferred_Starting_Time")]
-        public List<PreferredStartingTime>? PreferredStartingTimes { get; set; }
+        [XmlElement("Number_of_Preferred_Time_Slots")] public int NumberOfPreferredTimeSlots { get; set; }
+        [XmlElement("Preferred_Time_Slot")]
+        public List<PreferredTimeSlot>? PreferredTimeSlots { get; set; }
         [XmlElement("Active")] public bool Active { get; set; } = true;
         [XmlElement("Comments")] public string? Comments { get; set; }
     }
     [Serializable]
-    public class PreferredStartingTime
+    public class PreferredTimeSlot
     {
         [XmlElement("Day")] public string? Day { get; set; }
         [XmlElement("Hour")] public string? Hour { get; set; }

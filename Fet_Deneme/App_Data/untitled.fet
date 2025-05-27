@@ -7,23 +7,23 @@
     <Number_of_Days>10</Number_of_Days>
     <Day>
       <Name>D1</Name>
-      <Long_Name>Pazartesi</Long_Name>
+      <Long_Name>Day 1</Long_Name>
     </Day>
     <Day>
       <Name>D2</Name>
-      <Long_Name>Salı</Long_Name>
+      <Long_Name>Day 2</Long_Name>
     </Day>
     <Day>
       <Name>D3</Name>
-      <Long_Name>Çarşamba</Long_Name>
+      <Long_Name>Day 3</Long_Name>
     </Day>
     <Day>
       <Name>D4</Name>
-      <Long_Name>Perşembe</Long_Name>
+      <Long_Name>Day 4</Long_Name>
     </Day>
     <Day>
       <Name>D5</Name>
-      <Long_Name>Cuma</Long_Name>
+      <Long_Name>Day 5</Long_Name>
     </Day>
     <Day>
       <Name>D6</Name>
@@ -50,27 +50,27 @@
     <Number_of_Hours>6</Number_of_Hours>
     <Hour>
       <Name>H1</Name>
-      <Long_Name>08:00</Long_Name>
+      <Long_Name>Hour 1</Long_Name>
     </Hour>
     <Hour>
       <Name>H2</Name>
-      <Long_Name>09:00</Long_Name>
+      <Long_Name>Hour 2</Long_Name>
     </Hour>
     <Hour>
       <Name>H3</Name>
-      <Long_Name>10:00</Long_Name>
+      <Long_Name>Hour 3</Long_Name>
     </Hour>
     <Hour>
       <Name>H4</Name>
-      <Long_Name>11:00</Long_Name>
+      <Long_Name>Hour 4</Long_Name>
     </Hour>
     <Hour>
       <Name>H5</Name>
-      <Long_Name>12:00</Long_Name>
+      <Long_Name>Hour 5</Long_Name>
     </Hour>
     <Hour>
       <Name>H6</Name>
-      <Long_Name>13:00</Long_Name>
+      <Long_Name>Hour 6</Long_Name>
     </Hour>
   </Hours_List>
   <Subjects_List>
@@ -133758,6 +133758,22 @@
       <Comments>
       </Comments>
     </ConstraintBasicCompulsoryTime>
+    <ConstraintStudentsMaxHoursDaily>
+      <Weight_Percentage>100</Weight_Percentage>
+      <Maximum_Hours_Daily>2</Maximum_Hours_Daily>
+      <Active>true</Active>
+      <Comments>
+      </Comments>
+    </ConstraintStudentsMaxHoursDaily>
+    <ConstraintActivitiesNotOverlapping>
+      <Weight_Percentage>100</Weight_Percentage>
+      <Number_of_Activities>2</Number_of_Activities>
+      <Activity_Id>5</Activity_Id>
+      <Activity_Id>7</Activity_Id>
+      <Active>true</Active>
+      <Comments>
+      </Comments>
+    </ConstraintActivitiesNotOverlapping>
   </Time_Constraints_List>
   <Space_Constraints_List>
     <ConstraintBasicCompulsorySpace>
