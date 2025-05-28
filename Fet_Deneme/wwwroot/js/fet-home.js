@@ -1505,6 +1505,7 @@ window.openConstraintAddDialog = function (constraintType) {
     fetch("/Home/ShowData?dataType=activities")
       .then((r) => r.json())
       .then((actData) => {
+        let xml = window.fetCurrentXmlContent;
         if (!actData.success) {
           Swal.fire(
             "Hata",
@@ -1522,21 +1523,18 @@ window.openConstraintAddDialog = function (constraintType) {
           let id = a.id !== undefined && a.id !== null ? a.id : "-";
           return `${id} - ${subject}`;
         });
-        // Seçili id'leri parse et
+        // Seçili id'leri parse et (yeni eklemede boş olmalı)
         let selectedIds = [];
-        let re = /<Activity_Id>(.*?)<\/Activity_Id>/g;
-        let m;
-        while ((m = re.exec(xml))) selectedIds.push(parseInt(m[1]));
-        let minDays = parseInt(getVal("MinDays")) || 1;
-        let consecutive = getVal("Consecutive_If_Same_Day") === "true";
-        let weight = parseFloat(getVal("Weight_Percentage")) || 100;
-        let comments = getVal("Comments") || "";
+        let minDays = 1;
+        let consecutive = false;
+        let weight = 100;
+        let comments = "";
         let html = `
     <div class="d-flex gap-2 mb-2" style="height:220px;">
         <select id="fet-min-days-activity-list" multiple size="12" class="form-select" style="width:48%;font-size:13px;">
-            ${activityList.map((txt, i) => `<option value="${activities[i].id}" ${selectedIds.includes(activities[i].id) ? 'selected' : ''}>${txt}</option>`).join("")}
+            ${activityList.map((txt, i) => `<option value="${activities[i].id}">${txt}</option>`).join("")}
         </select>
-        <select id="fet-min-days-activity-selected" multiple size="12" class="form-select" style="width:48%;font-size:13px;">${activityList.map((txt, i) => selectedIds.includes(activities[i].id) ? `<option value="${activities[i].id}">${txt}</option>` : '').join("")}</select>
+        <select id="fet-min-days-activity-selected" multiple size="12" class="form-select" style="width:48%;font-size:13px;"></select>
     </div>
     <div class="d-flex gap-2 mb-2">
         <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="fet-min-days-btn-all">Tümü</button>
@@ -1566,7 +1564,7 @@ window.openConstraintAddDialog = function (constraintType) {
     </div>
     `;
         Swal.fire({
-          title: "Etkinlikler Arası Minimum Gün Düzenle",
+          title: "Etkinlikler Arası Minimum Gün Ekle",
           html: html,
           width: "900px",
           showCancelButton: true,
@@ -1616,26 +1614,27 @@ window.openConstraintAddDialog = function (constraintType) {
               Active: true,
               Comments: comments
             };
-            return dataObj;
+            return {
+              Type: constraintType,
+              Data: dataObj
+            };
           },
         }).then((result) => {
           if (result.isConfirmed && result.value) {
-            fetch("/Home/EditConstraint", {
+            fetch("/Home/AddConstraint", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                Type: constraintType,
-                Index: cIdx,
-                Data: result.value,
-              }),
+              body: JSON.stringify(result.value),
             })
               .then((response) => response.json())
               .then((data) => {
                 if (data.success) {
-                  Swal.fire("Başarılı", "Kısıt başarıyla güncellendi", "success");
-                  setTimeout(() => openConstraintDialog(constraintType), 500);
+                  Swal.fire("Başarılı", "Kısıt başarıyla kaydedildi", "success");
+                  if (data.xmlContent) {
+                    window.fetCurrentXmlContent = data.xmlContent;
+                  }
                 } else {
-                  Swal.fire("Hata", data.message || "Kısıt güncellenemedi", "error");
+                  Swal.fire("Hata", data.message || "Kısıt kaydedilemedi", "error");
                 }
               });
           }
@@ -1648,6 +1647,7 @@ window.openConstraintAddDialog = function (constraintType) {
     fetch("/Home/ShowData?dataType=activities")
       .then((r) => r.json())
       .then((actData) => {
+        let xml = window.fetCurrentXmlContent;
         if (!actData.success) {
           Swal.fire(
             "Hata",
@@ -1662,18 +1662,15 @@ window.openConstraintAddDialog = function (constraintType) {
           let id = a.id !== undefined && a.id !== null ? a.id : "-";
           return `${id} - ${subject}`;
         });
-        // Seçili id'leri parse et
+        // Seçili id'leri parse et (yeni eklemede boş olmalı)
         let selectedIds = [];
-        let re = /<Activity_Id>(.*?)<\/Activity_Id>/g;
-        let m;
-        while ((m = re.exec(xml))) selectedIds.push(parseInt(m[1]));
-        let comments = getVal("Comments") || "";
+        let comments = "";
         let html = `
     <div class="d-flex gap-2 mb-2" style="height:220px;">
         <select id="fet-notoverlap-activity-list" multiple size="12" class="form-select" style="width:48%;font-size:13px;">
-            ${activityList.map((txt, i) => `<option value="${activities[i].id}" ${selectedIds.includes(activities[i].id) ? 'selected' : ''}>${txt}</option>`).join("")}
+            ${activityList.map((txt, i) => `<option value="${activities[i].id}">${txt}</option>`).join("")}
         </select>
-        <select id="fet-notoverlap-activity-selected" multiple size="12" class="form-select" style="width:48%;font-size:13px;">${activityList.map((txt, i) => selectedIds.includes(activities[i].id) ? `<option value="${activities[i].id}">${txt}</option>` : '').join("")}</select>
+        <select id="fet-notoverlap-activity-selected" multiple size="12" class="form-select" style="width:48%;font-size:13px;"></select>
     </div>
     <div class="d-flex gap-2 mb-2">
         <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="fet-notoverlap-btn-all">Tümü</button>
@@ -1689,7 +1686,7 @@ window.openConstraintAddDialog = function (constraintType) {
     </div>
     `;
         Swal.fire({
-          title: "Etkinlikler Çakışmasın Düzenle",
+          title: "Etkinlikler Çakışmasın Ekle",
           html: html,
           width: "900px",
           showCancelButton: true,
@@ -1726,26 +1723,27 @@ window.openConstraintAddDialog = function (constraintType) {
               Active: true,
               Comments: comments
             };
-            return dataObj;
+            return {
+              Type: constraintType,
+              Data: dataObj
+            };
           },
         }).then((result) => {
           if (result.isConfirmed && result.value) {
-            fetch("/Home/EditConstraint", {
+            fetch("/Home/AddConstraint", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                Type: constraintType,
-                Index: cIdx,
-                Data: result.value,
-              }),
+              body: JSON.stringify(result.value),
             })
               .then((response) => response.json())
               .then((data) => {
                 if (data.success) {
-                  Swal.fire("Başarılı", "Kısıt başarıyla güncellendi", "success");
-                  setTimeout(() => openConstraintDialog(constraintType), 500);
+                  Swal.fire("Başarılı", "Kısıt başarıyla kaydedildi", "success");
+                  if (data.xmlContent) {
+                    window.fetCurrentXmlContent = data.xmlContent;
+                  }
                 } else {
-                  Swal.fire("Hata", data.message || "Kısıt güncellenemedi", "error");
+                  Swal.fire("Hata", data.message || "Kısıt kaydedilemedi", "error");
                 }
               });
           }
@@ -1993,7 +1991,10 @@ window.openConstraintEditForm = function (constraintType, idx, constraint) {
                   Active: true,
                   Comments: comments
                 };
-                return dataObj;
+                return {
+                  Type: constraintType,
+                  Data: dataObj
+                };
               },
             }).then((result) => {
               if (result.isConfirmed && result.value) {
@@ -2092,7 +2093,6 @@ window.openConstraintEditForm = function (constraintType, idx, constraint) {
       });
     });
 };
-
 
 window.deleteConstraint = function (constraintType, idx, constraint) {
   fetch("/Home/ListConstraints?type=" + constraintType)
