@@ -33,11 +33,21 @@ namespace Fet_Deneme.Services
     {
         private readonly FetRoot _data;
         private readonly string? _rawXml;
+        private ConstraintStudentsMaxHoursDailyChecker? _maxHoursDailyChecker;
+        private Dictionary<int, TimetableActivity>? _activityMap;
+        private List<Activity>? _allActivities;
 
         public TimetableGenerator(FetRoot data, string? rawXml = null)
         {
             _data = data;
             _rawXml = rawXml;
+            // Kısıtları ve checker'ı başlat
+            if (_data != null && _data.Days != null && _data.Activities != null)
+            {
+                var maxHoursDailyConstraints = _data.ConstraintStudentsMaxHoursDaily ?? new List<ConstraintStudentsMaxHoursDaily>();
+                _maxHoursDailyChecker = new ConstraintStudentsMaxHoursDailyChecker(maxHoursDailyConstraints, _data.Days);
+                _allActivities = _data.Activities;
+            }
         }
 
         public GenerationResult Generate()
@@ -147,6 +157,17 @@ namespace Fet_Deneme.Services
 
                 if (activity.Teachers.Intersect(otherActivity.Teachers).Any() ||
                     activity.Students.Intersect(otherActivity.Students).Any())
+                    return false;
+            }
+
+            // ConstraintStudentsMaxHoursDaily kontrolü
+            if (_maxHoursDailyChecker != null)
+            {
+                if (_activityMap == null)
+                {
+                    _activityMap = allActivities.ToDictionary(a => a.Id, a => a);
+                }
+                if (_allActivities != null && !_maxHoursDailyChecker.IsValid(assignments, activity, day, _activityMap, _allActivities))
                     return false;
             }
 

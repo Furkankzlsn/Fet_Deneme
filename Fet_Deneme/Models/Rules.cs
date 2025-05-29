@@ -44,6 +44,10 @@ namespace Fet_Deneme.Models
         [XmlArray("Activities_List")]
         [XmlArrayItem("Activity")]
         public List<Activity>? Activities { get; set; }
+
+        [XmlArray("Time_Constraints_List")]
+        [XmlArrayItem("ConstraintStudentsMaxHoursDaily")]
+        public List<ConstraintStudentsMaxHoursDaily>? ConstraintStudentsMaxHoursDaily { get; set; }
     }
 
     [Serializable]
