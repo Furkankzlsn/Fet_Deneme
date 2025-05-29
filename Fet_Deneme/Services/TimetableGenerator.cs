@@ -41,6 +41,10 @@ namespace Fet_Deneme.Services
         private List<ConstraintStudentsMaxHoursContinuously>? _constraintStudentsMaxHoursContinuously;
         private List<ConstraintBreakTimes>? _constraintBreakTimes;
         private ConstraintBreakTimesChecker? _breakTimesChecker;
+        private List<ConstraintActivityPreferredTimeSlots>? _constraintActivityPreferredTimeSlots;
+        private ConstraintActivityPreferredTimeSlotsChecker? _activityPreferredTimeSlotsChecker;
+        private List<ConstraintActivitiesNotOverlapping>? _constraintActivitiesNotOverlapping;
+        private ConstraintActivitiesNotOverlappingChecker? _activitiesNotOverlappingChecker;
 
         public TimetableGenerator(FetRoot data, string? rawXml = null)
         {
@@ -52,12 +56,16 @@ namespace Fet_Deneme.Services
                 _constraintStudentsMaxHoursDaily = _data.TimeConstraints.OfType<ConstraintStudentsMaxHoursDaily>().ToList();
                 _constraintStudentsMaxHoursContinuously = _data.TimeConstraints.OfType<ConstraintStudentsMaxHoursContinuously>().ToList();
                 _constraintBreakTimes = _data.TimeConstraints.OfType<ConstraintBreakTimes>().ToList();
+                _constraintActivityPreferredTimeSlots = _data.TimeConstraints.OfType<ConstraintActivityPreferredTimeSlots>().ToList();
+                _constraintActivitiesNotOverlapping = _data.TimeConstraints.OfType<ConstraintActivitiesNotOverlapping>().ToList();
             }
             if (_data != null && _data.Days != null && _data.Activities != null)
             {
                 _maxHoursDailyChecker = new ConstraintStudentsMaxHoursDailyChecker(_constraintStudentsMaxHoursDaily ?? new List<ConstraintStudentsMaxHoursDaily>(), _data.Days);
                 _maxHoursContinuouslyChecker = new ConstraintStudentsMaxHoursContinuouslyChecker(_constraintStudentsMaxHoursContinuously ?? new List<ConstraintStudentsMaxHoursContinuously>(), _data.Hours!);
                 _breakTimesChecker = new ConstraintBreakTimesChecker(_constraintBreakTimes ?? new List<ConstraintBreakTimes>());
+                _activityPreferredTimeSlotsChecker = new ConstraintActivityPreferredTimeSlotsChecker(_constraintActivityPreferredTimeSlots ?? new List<ConstraintActivityPreferredTimeSlots>());
+                _activitiesNotOverlappingChecker = new ConstraintActivitiesNotOverlappingChecker(_constraintActivitiesNotOverlapping ?? new List<ConstraintActivitiesNotOverlapping>());
                 _allActivities = _data.Activities;
             }
         }
@@ -161,6 +169,17 @@ namespace Fet_Deneme.Services
             // Break time kontrolü
             if (_breakTimesChecker != null && _breakTimesChecker.IsBreak(day, hour))
                 return false;
+            // Activity Preferred Time Slots kontrolü
+            if (_activityPreferredTimeSlotsChecker != null && !_activityPreferredTimeSlotsChecker.IsAllowed(activity.Id, day, hour))
+                return false;
+            // Activities Not Overlapping kontrolü
+            if (_activitiesNotOverlappingChecker != null)
+            {
+                if (_activityMap == null)
+                    _activityMap = allActivities.ToDictionary(a => a.Id, a => a);
+                if (!_activitiesNotOverlappingChecker.IsValid(activity, day, hour, assignments, _activityMap))
+                    return false;
+            }
 
             var sameSlotAssignments = assignments
                 .Where(a => a.Day == day && a.Hour == hour)

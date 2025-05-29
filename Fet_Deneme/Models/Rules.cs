@@ -51,6 +51,7 @@ namespace Fet_Deneme.Models
         [XmlArrayItem("ConstraintMinDaysBetweenActivities", typeof(ConstraintMinDaysBetweenActivities))]
         [XmlArrayItem("ConstraintActivitiesNotOverlapping", typeof(ConstraintActivitiesNotOverlapping))]
         [XmlArrayItem("ConstraintBreakTimes", typeof(ConstraintBreakTimes))]
+        [XmlArrayItem("ConstraintActivityPreferredTimeSlots", typeof(ConstraintActivityPreferredTimeSlots))]
         public List<object>? TimeConstraints { get; set; }
     }
 

@@ -1232,7 +1232,8 @@ window.openConstraintAddDialog = function (constraintType) {
               tableHtml += `<tr><th>${hour}</th>`;
               days.forEach((day, dIdx) => {
                 const cellId = `${day}-${hour}`;
-                tableHtml += `<td id="cell-${cellId}" style="background:#4caf50;cursor:pointer;" onclick="toggleSlot('${cellId}')"></td>`;
+                // Başlangıçta kırmızı (yasaklı), tıklayınca yeşil (izinli)
+                tableHtml += `<td id="cell-${cellId}" style="background:#e53935;cursor:pointer;" onclick="toggleSlot('${cellId}')"></td>`;
               });
               tableHtml += "</tr>";
             });
@@ -1242,17 +1243,17 @@ window.openConstraintAddDialog = function (constraintType) {
               if (!td) return;
               if (forbiddenSlots.has(cellId)) {
                 forbiddenSlots.delete(cellId);
-                td.style.background = "#4caf50";
+                td.style.background = "#e53935"; // Kırmızı (yasaklı)
               } else {
                 forbiddenSlots.add(cellId);
-                td.style.background = "#e53935";
+                td.style.background = "#4caf50"; // Yeşil (izinli)
               }
             };
             Swal.fire({
               title: "Etkinlik Tercihli Zaman Slotları",
               html: `
             ${activityHtml}
-            <div class='mb-2'>Kırmızı: Yasaklı, Yeşil: İzinli</div>
+            <div class='mb-2'>Yeşil: İzinli, Kırmızı: Yasaklı</div>
             ${tableHtml}
             <div class="mb-3">
                 <label class="form-label">Açıklama</label>
