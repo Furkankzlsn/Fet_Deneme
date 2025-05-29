@@ -46,8 +46,12 @@ namespace Fet_Deneme.Models
         public List<Activity>? Activities { get; set; }
 
         [XmlArray("Time_Constraints_List")]
-        [XmlArrayItem("ConstraintStudentsMaxHoursDaily")]
-        public List<ConstraintStudentsMaxHoursDaily>? ConstraintStudentsMaxHoursDaily { get; set; }
+        [XmlArrayItem("ConstraintStudentsMaxHoursDaily", typeof(ConstraintStudentsMaxHoursDaily))]
+        [XmlArrayItem("ConstraintStudentsMaxHoursContinuously", typeof(ConstraintStudentsMaxHoursContinuously))]
+        [XmlArrayItem("ConstraintMinDaysBetweenActivities", typeof(ConstraintMinDaysBetweenActivities))]
+        [XmlArrayItem("ConstraintActivitiesNotOverlapping", typeof(ConstraintActivitiesNotOverlapping))]
+        [XmlArrayItem("ConstraintBreakTimes", typeof(ConstraintBreakTimes))]
+        public List<object>? TimeConstraints { get; set; }
     }
 
     [Serializable]
