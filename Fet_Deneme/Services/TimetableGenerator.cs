@@ -39,6 +39,8 @@ namespace Fet_Deneme.Services
         private List<Activity>? _allActivities;
         private List<ConstraintStudentsMaxHoursDaily>? _constraintStudentsMaxHoursDaily;
         private List<ConstraintStudentsMaxHoursContinuously>? _constraintStudentsMaxHoursContinuously;
+        private List<ConstraintBreakTimes>? _constraintBreakTimes;
+        private ConstraintBreakTimesChecker? _breakTimesChecker;
 
         public TimetableGenerator(FetRoot data, string? rawXml = null)
         {
@@ -49,11 +51,13 @@ namespace Fet_Deneme.Services
             {
                 _constraintStudentsMaxHoursDaily = _data.TimeConstraints.OfType<ConstraintStudentsMaxHoursDaily>().ToList();
                 _constraintStudentsMaxHoursContinuously = _data.TimeConstraints.OfType<ConstraintStudentsMaxHoursContinuously>().ToList();
+                _constraintBreakTimes = _data.TimeConstraints.OfType<ConstraintBreakTimes>().ToList();
             }
             if (_data != null && _data.Days != null && _data.Activities != null)
             {
                 _maxHoursDailyChecker = new ConstraintStudentsMaxHoursDailyChecker(_constraintStudentsMaxHoursDaily ?? new List<ConstraintStudentsMaxHoursDaily>(), _data.Days);
                 _maxHoursContinuouslyChecker = new ConstraintStudentsMaxHoursContinuouslyChecker(_constraintStudentsMaxHoursContinuously ?? new List<ConstraintStudentsMaxHoursContinuously>(), _data.Hours!);
+                _breakTimesChecker = new ConstraintBreakTimesChecker(_constraintBreakTimes ?? new List<ConstraintBreakTimes>());
                 _allActivities = _data.Activities;
             }
         }
@@ -154,6 +158,10 @@ namespace Fet_Deneme.Services
 
         private bool IsSlotAvailable(TimetableActivity activity, string day, string hour, List<GeneratedAssignment> assignments, List<TimetableActivity> allActivities)
         {
+            // Break time kontrolü
+            if (_breakTimesChecker != null && _breakTimesChecker.IsBreak(day, hour))
+                return false;
+
             var sameSlotAssignments = assignments
                 .Where(a => a.Day == day && a.Hour == hour)
                 .ToList();
