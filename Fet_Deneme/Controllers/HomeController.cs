@@ -1232,6 +1232,10 @@ case "hours":
                         var model6 = ConvertData<ConstraintBreakTimesModel>(req.Data);
                         newConstraint = CreateConstraintBreakTimes(doc, model6);
                         break;
+                    case "ConstraintMaxStudentsInSelectedTimeSlot":
+                        var model7 = ConvertData<ConstraintMaxStudentsInSelectedTimeSlotModel>(req.Data);
+                        newConstraint = CreateConstraintMaxStudentsInSelectedTimeSlot(doc, model7);
+                        break;
                     default:
                         return Json(new { success = false, message = "Unknown constraint type." });
                 }
@@ -1351,6 +1355,24 @@ case "hours":
             node.AppendChild(CreateTextElement(doc, "Comments", data.Comments ?? ""));
             return node;
         }
+        private System.Xml.XmlElement CreateConstraintMaxStudentsInSelectedTimeSlot(System.Xml.XmlDocument doc, ConstraintMaxStudentsInSelectedTimeSlotModel data)
+        {
+            var node = doc.CreateElement("ConstraintMaxStudentsInSelectedTimeSlot");
+            node.AppendChild(CreateTextElement(doc, "Weight_Percentage", data.WeightPercentage.ToString()));
+            var slots = data.SelectedTimeSlots ?? new List<PreferredTimeSlot>();
+            node.AppendChild(CreateTextElement(doc, "Number_of_Selected_Time_Slots", slots.Count.ToString()));
+            foreach (var t in slots)
+            {
+                var slot = doc.CreateElement("Selected_Time_Slot");
+                slot.AppendChild(CreateTextElement(doc, "Day", t.Day));
+                slot.AppendChild(CreateTextElement(doc, "Hour", t.Hour));
+                node.AppendChild(slot);
+            }
+            node.AppendChild(CreateTextElement(doc, "Max_Students", data.MaxStudents.ToString()));
+            node.AppendChild(CreateTextElement(doc, "Active", (data.Active).ToString().ToLower()));
+            node.AppendChild(CreateTextElement(doc, "Comments", data.Comments ?? ""));
+            return node;
+        }
         private System.Xml.XmlElement CreateTextElement(System.Xml.XmlDocument doc, string name, string? value)
         {
             var el = doc.CreateElement(name);
@@ -1409,44 +1431,68 @@ case "hours":
                 var n = node.SelectSingleNode("Number_of_Break_Times")?.InnerText;
                 summary += ", NA:" + n;
             }
+            if (type == "ConstraintMaxStudentsInSelectedTimeSlot")
+            {
+                var n = node.SelectSingleNode("Number_of_Selected_Time_Slots")?.InnerText;
+                summary += ", NSlots:" + n;
+                var max = node.SelectSingleNode("Max_Students")?.InnerText;
+                summary += ", MaxStudents:" + max;
+            }
             return summary;
         }
 
         private string GetConstraintDetails(System.Xml.XmlNode node)
         {
-            // Daha okunabilir detay için başlık:değer şeklinde yaz
             var type = node.Name;
             var details = $"<b>Zaman kısıtı</b><br>";
             if (type == "ConstraintActivitiesNotOverlapping")
             {
-            details += "Dersler Ardışık Olmamalı<br>";
-            details += $"Weight (percentage)={node.SelectSingleNode("Weight_Percentage")?.InnerText ?? ""}<br>";
-            details += $"Ders sayısı={node.SelectSingleNode("Number_of_Activities")?.InnerText ?? ""}<br>";
-            var ids = node.SelectNodes("Activity_Id");
-            if (ids != null && ids.Count > 0)
-            {
-                details += "Activity with id=" + string.Join(",", ids.Cast<System.Xml.XmlNode>().Select(x => x.InnerText)) + "<br>";
+                details += "Dersler Ardışık Olmamalı<br>";
+                details += $"Weight (percentage)={node.SelectSingleNode("Weight_Percentage")?.InnerText ?? ""}<br>";
+                details += $"Ders sayısı={node.SelectSingleNode("Number_of_Activities")?.InnerText ?? ""}<br>";
+                var ids = node.SelectNodes("Activity_Id");
+                if (ids != null && ids.Count > 0)
+                {
+                    details += "Activity with id=" + string.Join(",", ids.Cast<System.Xml.XmlNode>().Select(x => x.InnerText)) + "<br>";
+                }
             }
+            else if (type == "ConstraintMaxStudentsInSelectedTimeSlot")
+            {
+                details += "Seçili slotlarda maksimum öğrenci kısıtı<br>";
+                details += $"Weight (percentage)={node.SelectSingleNode("Weight_Percentage")?.InnerText ?? ""}<br>";
+                details += $"Slot sayısı={node.SelectSingleNode("Number_of_Selected_Time_Slots")?.InnerText ?? ""}<br>";
+                details += $"Max Students={node.SelectSingleNode("Max_Students")?.InnerText ?? ""}<br>";
+                var slots = node.SelectNodes("Selected_Time_Slot");
+                if (slots != null && slots.Count > 0)
+                {
+                    details += "<b>Slotlar:</b><br>";
+                    foreach (System.Xml.XmlNode slot in slots)
+                    {
+                        var day = slot.SelectSingleNode("Day")?.InnerText;
+                        var hour = slot.SelectSingleNode("Hour")?.InnerText;
+                        details += $"&nbsp;&nbsp;{day} - {hour}<br>";
+                    }
+                }
             }
             else
             {
-            // Tüm alt elemanları başlık:değer şeklinde sırala
-            foreach (System.Xml.XmlNode child in node.ChildNodes)
-            {
-                if (child.HasChildNodes && child.ChildNodes.Count > 1 && child.FirstChild.NodeType == System.Xml.XmlNodeType.Element)
+                // Tüm alt elemanları başlık:değer şeklinde sırala
+                foreach (System.Xml.XmlNode child in node.ChildNodes)
                 {
-                // Alt elemanları listele
-                details += $"<b>{child.Name}</b>:<br>";
-                foreach (System.Xml.XmlNode sub in child.ChildNodes)
-                {
-                    details += $"&nbsp;&nbsp;{sub.Name}: {sub.InnerText}<br>";
+                    if (child.HasChildNodes && child.ChildNodes.Count > 1 && child.FirstChild.NodeType == System.Xml.XmlNodeType.Element)
+                    {
+                        // Alt elemanları listele
+                        details += $"<b>{child.Name}</b>:<br>";
+                        foreach (System.Xml.XmlNode sub in child.ChildNodes)
+                        {
+                            details += $"&nbsp;&nbsp;{sub.Name}: {sub.InnerText}<br>";
+                        }
+                    }
+                    else
+                    {
+                        details += $"{child.Name}: {child.InnerText}<br>";
+                    }
                 }
-                }
-                else
-                {
-                details += $"{child.Name}: {child.InnerText}<br>";
-                }
-            }
             }
             return details;
         }
@@ -1498,6 +1544,9 @@ case "hours":
                         break;
                     case "ConstraintBreakTimes":
                         newConstraint = CreateConstraintBreakTimes(doc, req.Data);
+                        break;
+                    case "ConstraintMaxStudentsInSelectedTimeSlot":
+                        newConstraint = CreateConstraintMaxStudentsInSelectedTimeSlot(doc, req.Data);
                         break;
                     default:
                         return Json(new { success = false, message = "Unknown constraint type." });
@@ -1678,6 +1727,15 @@ case "hours":
         {
             public int WeightPercentage { get; set; }
             public List<PreferredTimeSlot> BreakTimes { get; set; } = new();
+            public bool Active { get; set; }
+            public string? Comments { get; set; }
+        }
+        public class ConstraintMaxStudentsInSelectedTimeSlotModel
+        {
+            public int WeightPercentage { get; set; }
+            public int NumberOfSelectedTimeSlots { get; set; }
+            public List<PreferredTimeSlot> SelectedTimeSlots { get; set; } = new();
+            public int MaxStudents { get; set; }
             public bool Active { get; set; }
             public string? Comments { get; set; }
         }

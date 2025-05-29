@@ -1319,6 +1319,130 @@ window.openConstraintAddDialog = function (constraintType) {
       });
     return;
   }
+  // 1.5. ConstraintMaxStudentsInSelectedTimeSlot
+  if (constraintType === "ConstraintMaxStudentsInSelectedTimeSlot") {
+    fetch("/Home/GetDaysAndHours")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.success) {
+          Swal.fire(
+            "Hata",
+            data.message || "Gün ve saatler alınamadı",
+            "error"
+          );
+          return;
+        }
+        const days = data.days.filter(Boolean);
+        const hours = data.hours.filter(Boolean);
+        let selectedSlots = new Set();
+        let tableHtml =
+          '<table class="table table-bordered text-center align-middle"><thead><tr><th></th>';
+        days.forEach((day) => {
+          tableHtml += `<th>${day}</th>`;
+        });
+        tableHtml += "</tr></thead><tbody>";
+        hours.forEach((hour, hIdx) => {
+          tableHtml += `<tr><th>${hour}</th>`;
+          days.forEach((day, dIdx) => {
+            const cellId = `${day}-${hour}`;
+            tableHtml += `<td id="maxstudents-cell-${cellId}" style="background:#e53935;cursor:pointer;" onclick="window.toggleMaxStudentsSlot('${cellId}')"></td>`;
+          });
+          tableHtml += "</tr>";
+        });
+        tableHtml += "</tbody></table>";
+        window.toggleMaxStudentsSlot = function (cellId) {
+          const td = document.getElementById("maxstudents-cell-" + cellId);
+          if (!td) return;
+          if (selectedSlots.has(cellId)) {
+            selectedSlots.delete(cellId);
+            td.style.background = "#e53935"; // Kırmızı (seçilmemiş)
+          } else {
+            selectedSlots.add(cellId);
+            td.style.background = "#4caf50"; // Yeşil (seçili)
+          }
+        };
+        Swal.fire({
+          title: "Seçili Slotlarda Maksimum Öğrenci Kısıtı",
+          html: `
+          <div class="mb-2">Yeşil: Seçili, Kırmızı: Seçilmemiş</div>
+          ${tableHtml}
+          <div class="mb-3">
+            <label class="form-label">Maksimum Öğrenci Sayısı</label>
+            <input type="number" class="form-control" id="max-students-input" min="1" value="30">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Açıklama</label>
+            <textarea class="form-control" id="constraint-comments" rows="2"></textarea>
+          </div>
+        `,
+          width: "800px",
+          showCancelButton: true,
+          confirmButtonText: "Kaydet",
+          cancelButtonText: "İptal",
+          preConfirm: () => {
+            let result = [];
+            selectedSlots.forEach((cellId) => {
+              const [day, hour] = cellId.split("-");
+              result.push({ Day: day, Hour: hour });
+            });
+            let maxStudents = parseInt(
+              document.getElementById("max-students-input").value
+            );
+            if (!result.length) {
+              Swal.showValidationMessage("En az bir slot seçmelisiniz.");
+              return false;
+            }
+            if (!maxStudents || maxStudents < 1) {
+              Swal.showValidationMessage(
+                "Geçerli bir maksimum öğrenci sayısı girin."
+              );
+              return false;
+            }
+            let dataObj = {
+              WeightPercentage: 100,
+              SelectedTimeSlots: result,
+              NumberOfSelectedTimeSlots: result.length,
+              MaxStudents: maxStudents,
+              Active: true,
+              Comments:
+                document.getElementById("constraint-comments").value || "",
+            };
+            return {
+              Type: constraintType,
+              Data: dataObj,
+            };
+          },
+        }).then((result) => {
+          if (result.isConfirmed && result.value) {
+            fetch("/Home/AddConstraint", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(result.value),
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                if (data.success) {
+                  Swal.fire(
+                    "Başarılı",
+                    "Kısıt başarıyla kaydedildi",
+                    "success"
+                  );
+                  if (data.xmlContent) {
+                    window.fetCurrentXmlContent = data.xmlContent;
+                  }
+                } else {
+                  Swal.fire(
+                    "Hata",
+                    data.message || "Kısıt kaydedilemedi",
+                    "error"
+                  );
+                }
+              });
+          }
+        });
+      });
+    return;
+  }
   // ConstraintBreakTimes: Kapatılacak Zaman Bloğu (period/slot table selection)
   if (constraintType === "ConstraintBreakTimes") {
     fetch("/Home/GetDaysAndHours")
@@ -1533,7 +1657,12 @@ window.openConstraintAddDialog = function (constraintType) {
         let html = `
     <div class="d-flex gap-2 mb-2" style="height:220px;">
         <select id="fet-min-days-activity-list" multiple size="12" class="form-select" style="width:48%;font-size:13px;">
-            ${activityList.map((txt, i) => `<option value="${activities[i].id}">${txt}</option>`).join("")}
+            ${activityList
+              .map(
+                (txt, i) =>
+                  `<option value="${activities[i].id}">${txt}</option>`
+              )
+              .join("")}
         </select>
         <select id="fet-min-days-activity-selected" multiple size="12" class="form-select" style="width:48%;font-size:13px;"></select>
     </div>
@@ -1550,7 +1679,9 @@ window.openConstraintAddDialog = function (constraintType) {
         <input type="number" class="form-control" id="fet-min-days-value" min="1" max="30" value="${minDays}">
     </div>
     <div class="form-check mb-2">
-        <input class="form-check-input" type="checkbox" value="1" id="fet-min-days-consecutive" ${consecutive ? 'checked' : ''}>
+        <input class="form-check-input" type="checkbox" value="1" id="fet-min-days-consecutive" ${
+          consecutive ? "checked" : ""
+        }>
         <label class="form-check-label" for="fet-min-days-consecutive">
             Aynı günse ardışık olsun
         </label>
@@ -1573,28 +1704,51 @@ window.openConstraintAddDialog = function (constraintType) {
           cancelButtonText: "İptal",
           didOpen: () => {
             const list = document.getElementById("fet-min-days-activity-list");
-            const sel = document.getElementById("fet-min-days-activity-selected");
-            document.getElementById("fet-min-days-btn-all").onclick = function () { sel.innerHTML = list.innerHTML; };
-            document.getElementById("fet-min-days-btn-clear").onclick = function () { sel.innerHTML = ""; };
-            document.getElementById("fet-min-days-btn-right").onclick = function () {
-              Array.from(list.selectedOptions).forEach((opt) => {
-                if (![...sel.options].some((o) => o.value === opt.value)) {
-                  let newOpt = opt.cloneNode(true);
-                  sel.appendChild(newOpt);
-                }
-              });
-            };
-            document.getElementById("fet-min-days-btn-left").onclick = function () {
-              Array.from(sel.selectedOptions).forEach((opt) => sel.removeChild(opt));
-            };
+            const sel = document.getElementById(
+              "fet-min-days-activity-selected"
+            );
+            document.getElementById("fet-min-days-btn-all").onclick =
+              function () {
+                sel.innerHTML = list.innerHTML;
+              };
+            document.getElementById("fet-min-days-btn-clear").onclick =
+              function () {
+                sel.innerHTML = "";
+              };
+            document.getElementById("fet-min-days-btn-right").onclick =
+              function () {
+                Array.from(list.selectedOptions).forEach((opt) => {
+                  if (![...sel.options].some((o) => o.value === opt.value)) {
+                    let newOpt = opt.cloneNode(true);
+                    sel.appendChild(newOpt);
+                  }
+                });
+              };
+            document.getElementById("fet-min-days-btn-left").onclick =
+              function () {
+                Array.from(sel.selectedOptions).forEach((opt) =>
+                  sel.removeChild(opt)
+                );
+              };
           },
           preConfirm: () => {
-            const sel = document.getElementById("fet-min-days-activity-selected");
-            const selectedIds = Array.from(sel.options).map((o) => parseInt(o.value)).filter(Boolean);
-            const minDays = parseInt(document.getElementById("fet-min-days-value").value);
-            const consecutive = document.getElementById("fet-min-days-consecutive").checked;
-            const weight = parseFloat(document.getElementById("fet-min-days-weight").value);
-            const comments = document.getElementById("constraint-comments").value || '';
+            const sel = document.getElementById(
+              "fet-min-days-activity-selected"
+            );
+            const selectedIds = Array.from(sel.options)
+              .map((o) => parseInt(o.value))
+              .filter(Boolean);
+            const minDays = parseInt(
+              document.getElementById("fet-min-days-value").value
+            );
+            const consecutive = document.getElementById(
+              "fet-min-days-consecutive"
+            ).checked;
+            const weight = parseFloat(
+              document.getElementById("fet-min-days-weight").value
+            );
+            const comments =
+              document.getElementById("constraint-comments").value || "";
             if (!selectedIds.length) {
               Swal.showValidationMessage("En az bir etkinlik seçmelisiniz");
               return false;
@@ -1613,11 +1767,11 @@ window.openConstraintAddDialog = function (constraintType) {
               MinDays: minDays,
               ConsecutiveIfSameDay: consecutive,
               Active: true,
-              Comments: comments
+              Comments: comments,
             };
             return {
               Type: constraintType,
-              Data: dataObj
+              Data: dataObj,
             };
           },
         }).then((result) => {
@@ -1630,12 +1784,20 @@ window.openConstraintAddDialog = function (constraintType) {
               .then((response) => response.json())
               .then((data) => {
                 if (data.success) {
-                  Swal.fire("Başarılı", "Kısıt başarıyla kaydedildi", "success");
+                  Swal.fire(
+                    "Başarılı",
+                    "Kısıt başarıyla kaydedildi",
+                    "success"
+                  );
                   if (data.xmlContent) {
                     window.fetCurrentXmlContent = data.xmlContent;
                   }
                 } else {
-                  Swal.fire("Hata", data.message || "Kısıt kaydedilemedi", "error");
+                  Swal.fire(
+                    "Hata",
+                    data.message || "Kısıt kaydedilemedi",
+                    "error"
+                  );
                 }
               });
           }
@@ -1659,7 +1821,10 @@ window.openConstraintAddDialog = function (constraintType) {
         }
         const activities = actData.data || [];
         let activityList = activities.map((a) => {
-          let subject = a.subject !== undefined && a.subject !== null && a.subject !== "" ? a.subject : "Bilinmiyor";
+          let subject =
+            a.subject !== undefined && a.subject !== null && a.subject !== ""
+              ? a.subject
+              : "Bilinmiyor";
           let id = a.id !== undefined && a.id !== null ? a.id : "-";
           return `${id} - ${subject}`;
         });
@@ -1669,7 +1834,12 @@ window.openConstraintAddDialog = function (constraintType) {
         let html = `
     <div class="d-flex gap-2 mb-2" style="height:220px;">
         <select id="fet-notoverlap-activity-list" multiple size="12" class="form-select" style="width:48%;font-size:13px;">
-            ${activityList.map((txt, i) => `<option value="${activities[i].id}">${txt}</option>`).join("")}
+            ${activityList
+              .map(
+                (txt, i) =>
+                  `<option value="${activities[i].id}">${txt}</option>`
+              )
+              .join("")}
         </select>
         <select id="fet-notoverlap-activity-selected" multiple size="12" class="form-select" style="width:48%;font-size:13px;"></select>
     </div>
@@ -1694,26 +1864,45 @@ window.openConstraintAddDialog = function (constraintType) {
           confirmButtonText: "Kaydet",
           cancelButtonText: "İptal",
           didOpen: () => {
-            const list = document.getElementById("fet-notoverlap-activity-list");
-            const sel = document.getElementById("fet-notoverlap-activity-selected");
-            document.getElementById("fet-notoverlap-btn-all").onclick = function () { sel.innerHTML = list.innerHTML; };
-            document.getElementById("fet-notoverlap-btn-clear").onclick = function () { sel.innerHTML = ""; };
-            document.getElementById("fet-notoverlap-btn-right").onclick = function () {
-              Array.from(list.selectedOptions).forEach((opt) => {
-                if (![...sel.options].some((o) => o.value === opt.value)) {
-                  let newOpt = opt.cloneNode(true);
-                  sel.appendChild(newOpt);
-                }
-              });
-            };
-            document.getElementById("fet-notoverlap-btn-left").onclick = function () {
-              Array.from(sel.selectedOptions).forEach((opt) => sel.removeChild(opt));
-            };
+            const list = document.getElementById(
+              "fet-notoverlap-activity-list"
+            );
+            const sel = document.getElementById(
+              "fet-notoverlap-activity-selected"
+            );
+            document.getElementById("fet-notoverlap-btn-all").onclick =
+              function () {
+                sel.innerHTML = list.innerHTML;
+              };
+            document.getElementById("fet-notoverlap-btn-clear").onclick =
+              function () {
+                sel.innerHTML = "";
+              };
+            document.getElementById("fet-notoverlap-btn-right").onclick =
+              function () {
+                Array.from(list.selectedOptions).forEach((opt) => {
+                  if (![...sel.options].some((o) => o.value === opt.value)) {
+                    let newOpt = opt.cloneNode(true);
+                    sel.appendChild(newOpt);
+                  }
+                });
+              };
+            document.getElementById("fet-notoverlap-btn-left").onclick =
+              function () {
+                Array.from(sel.selectedOptions).forEach((opt) =>
+                  sel.removeChild(opt)
+                );
+              };
           },
           preConfirm: () => {
-            const sel = document.getElementById("fet-notoverlap-activity-selected");
-            const selectedIds = Array.from(sel.options).map((o) => parseInt(o.value)).filter(Boolean);
-            const comments = document.getElementById("constraint-comments").value || '';
+            const sel = document.getElementById(
+              "fet-notoverlap-activity-selected"
+            );
+            const selectedIds = Array.from(sel.options)
+              .map((o) => parseInt(o.value))
+              .filter(Boolean);
+            const comments =
+              document.getElementById("constraint-comments").value || "";
             if (!selectedIds.length) {
               Swal.showValidationMessage("En az bir etkinlik seçmelisiniz");
               return false;
@@ -1722,11 +1911,11 @@ window.openConstraintAddDialog = function (constraintType) {
               WeightPercentage: 100,
               ActivityIds: selectedIds,
               Active: true,
-              Comments: comments
+              Comments: comments,
             };
             return {
               Type: constraintType,
-              Data: dataObj
+              Data: dataObj,
             };
           },
         }).then((result) => {
@@ -1739,12 +1928,20 @@ window.openConstraintAddDialog = function (constraintType) {
               .then((response) => response.json())
               .then((data) => {
                 if (data.success) {
-                  Swal.fire("Başarılı", "Kısıt başarıyla kaydedildi", "success");
+                  Swal.fire(
+                    "Başarılı",
+                    "Kısıt başarıyla kaydedildi",
+                    "success"
+                  );
                   if (data.xmlContent) {
                     window.fetCurrentXmlContent = data.xmlContent;
                   }
                 } else {
-                  Swal.fire("Hata", data.message || "Kısıt kaydedilemedi", "error");
+                  Swal.fire(
+                    "Hata",
+                    data.message || "Kısıt kaydedilemedi",
+                    "error"
+                  );
                 }
               });
           }
@@ -1883,7 +2080,10 @@ window.openConstraintEditForm = function (constraintType, idx, constraint) {
         return m ? m[1] : "";
       };
       // --- DÜZENLEME MODALINI KISIT TÜRÜNE GÖRE OLUŞTUR ---
-      if (constraintType === "ConstraintMinDaysBetweenActivities" || constraintType === "ConstraintActivitiesNotOverlapping") {
+      if (
+        constraintType === "ConstraintMinDaysBetweenActivities" ||
+        constraintType === "ConstraintActivitiesNotOverlapping"
+      ) {
         fetch("/Home/ShowData?dataType=activities")
           .then((r) => r.json())
           .then((actData) => {
@@ -1910,9 +2110,22 @@ window.openConstraintEditForm = function (constraintType, idx, constraint) {
             let html = `
     <div class="d-flex gap-2 mb-2" style="height:220px;">
         <select id="fet-min-days-activity-list" multiple size="12" class="form-select" style="width:48%;font-size:13px;">
-            ${activityList.map((txt, i) => `<option value="${activities[i].id}" ${selectedIds.includes(activities[i].id) ? 'selected' : ''}>${txt}</option>`).join("")}
+            ${activityList
+              .map(
+                (txt, i) =>
+                  `<option value="${activities[i].id}" ${
+                    selectedIds.includes(activities[i].id) ? "selected" : ""
+                  }>${txt}</option>`
+              )
+              .join("")}
         </select>
-        <select id="fet-min-days-activity-selected" multiple size="12" class="form-select" style="width:48%;font-size:13px;">${activityList.map((txt, i) => selectedIds.includes(activities[i].id) ? `<option value="${activities[i].id}">${txt}</option>` : '').join("")}</select>
+        <select id="fet-min-days-activity-selected" multiple size="12" class="form-select" style="width:48%;font-size:13px;">${activityList
+          .map((txt, i) =>
+            selectedIds.includes(activities[i].id)
+              ? `<option value="${activities[i].id}">${txt}</option>`
+              : ""
+          )
+          .join("")}</select>
     </div>
     <div class="d-flex gap-2 mb-2">
         <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="fet-min-days-btn-all">Tümü</button>
@@ -1927,7 +2140,9 @@ window.openConstraintEditForm = function (constraintType, idx, constraint) {
         <input type="number" class="form-control" id="fet-min-days-value" min="1" max="30" value="${minDays}">
     </div>
     <div class="form-check mb-2">
-        <input class="form-check-input" type="checkbox" value="1" id="fet-min-days-consecutive" ${consecutive ? 'checked' : ''}>
+        <input class="form-check-input" type="checkbox" value="1" id="fet-min-days-consecutive" ${
+          consecutive ? "checked" : ""
+        }>
         <label class="form-check-label" for="fet-min-days-consecutive">
             Aynı günse ardışık olsun
         </label>
@@ -1949,29 +2164,56 @@ window.openConstraintEditForm = function (constraintType, idx, constraint) {
               confirmButtonText: "Kaydet",
               cancelButtonText: "İptal",
               didOpen: () => {
-                const list = document.getElementById("fet-min-days-activity-list");
-                const sel = document.getElementById("fet-min-days-activity-selected");
-                document.getElementById("fet-min-days-btn-all").onclick = function () { sel.innerHTML = list.innerHTML; };
-                document.getElementById("fet-min-days-btn-clear").onclick = function () { sel.innerHTML = ""; };
-                document.getElementById("fet-min-days-btn-right").onclick = function () {
-                  Array.from(list.selectedOptions).forEach((opt) => {
-                    if (![...sel.options].some((o) => o.value === opt.value)) {
-                      let newOpt = opt.cloneNode(true);
-                      sel.appendChild(newOpt);
-                    }
-                  });
-                };
-                document.getElementById("fet-min-days-btn-left").onclick = function () {
-                  Array.from(sel.selectedOptions).forEach((opt) => sel.removeChild(opt));
-                };
+                const list = document.getElementById(
+                  "fet-min-days-activity-list"
+                );
+                const sel = document.getElementById(
+                  "fet-min-days-activity-selected"
+                );
+                document.getElementById("fet-min-days-btn-all").onclick =
+                  function () {
+                    sel.innerHTML = list.innerHTML;
+                  };
+                document.getElementById("fet-min-days-btn-clear").onclick =
+                  function () {
+                    sel.innerHTML = "";
+                  };
+                document.getElementById("fet-min-days-btn-right").onclick =
+                  function () {
+                    Array.from(list.selectedOptions).forEach((opt) => {
+                      if (
+                        ![...sel.options].some((o) => o.value === opt.value)
+                      ) {
+                        let newOpt = opt.cloneNode(true);
+                        sel.appendChild(newOpt);
+                      }
+                    });
+                  };
+                document.getElementById("fet-min-days-btn-left").onclick =
+                  function () {
+                    Array.from(sel.selectedOptions).forEach((opt) =>
+                      sel.removeChild(opt)
+                    );
+                  };
               },
               preConfirm: () => {
-                const sel = document.getElementById("fet-min-days-activity-selected");
-                const selectedIds = Array.from(sel.options).map((o) => parseInt(o.value)).filter(Boolean);
-                const minDays = parseInt(document.getElementById("fet-min-days-value").value);
-                const consecutive = document.getElementById("fet-min-days-consecutive").checked;
-                const weight = parseFloat(document.getElementById("fet-min-days-weight").value);
-                const comments = document.getElementById("constraint-comments").value || '';
+                const sel = document.getElementById(
+                  "fet-min-days-activity-selected"
+                );
+                const selectedIds = Array.from(sel.options)
+                  .map((o) => parseInt(o.value))
+                  .filter(Boolean);
+                const minDays = parseInt(
+                  document.getElementById("fet-min-days-value").value
+                );
+                const consecutive = document.getElementById(
+                  "fet-min-days-consecutive"
+                ).checked;
+                const weight = parseFloat(
+                  document.getElementById("fet-min-days-weight").value
+                );
+                const comments =
+                  document.getElementById("constraint-comments").value || "";
                 if (!selectedIds.length) {
                   Swal.showValidationMessage("En az bir etkinlik seçmelisiniz");
                   return false;
@@ -1981,7 +2223,9 @@ window.openConstraintEditForm = function (constraintType, idx, constraint) {
                   return false;
                 }
                 if (isNaN(weight) || weight < 0 || weight > 100) {
-                  Swal.showValidationMessage("Ağırlık yüzdesi 0-100 arası olmalı");
+                  Swal.showValidationMessage(
+                    "Ağırlık yüzdesi 0-100 arası olmalı"
+                  );
                   return false;
                 }
                 let dataObj = {
@@ -1990,11 +2234,11 @@ window.openConstraintEditForm = function (constraintType, idx, constraint) {
                   MinDays: minDays,
                   ConsecutiveIfSameDay: consecutive,
                   Active: true,
-                  Comments: comments
+                  Comments: comments,
                 };
                 return {
                   Type: constraintType,
-                  Data: dataObj
+                  Data: dataObj,
                 };
               },
             }).then((result) => {
@@ -2011,10 +2255,21 @@ window.openConstraintEditForm = function (constraintType, idx, constraint) {
                   .then((response) => response.json())
                   .then((data) => {
                     if (data.success) {
-                      Swal.fire("Başarılı", "Kısıt başarıyla güncellendi", "success");
-                      setTimeout(() => openConstraintDialog(constraintType), 500);
+                      Swal.fire(
+                        "Başarılı",
+                        "Kısıt başarıyla güncellendi",
+                        "success"
+                      );
+                      setTimeout(
+                        () => openConstraintDialog(constraintType),
+                        500
+                      );
                     } else {
-                      Swal.fire("Hata", data.message || "Kısıt güncellenemedi", "error");
+                      Swal.fire(
+                        "Hata",
+                        data.message || "Kısıt güncellenemedi",
+                        "error"
+                      );
                     }
                   });
               }
@@ -2031,13 +2286,19 @@ window.openConstraintEditForm = function (constraintType, idx, constraint) {
       let formHtml = `
       <div class="mb-3">
           <label class="form-label">Ağırlık (%)</label>
-          <input type="number" class="form-control" id="constraint-weight" value="${getVal("Weight_Percentage") || 100}" min="1" max="100">
+          <input type="number" class="form-control" id="constraint-weight" value="${
+            getVal("Weight_Percentage") || 100
+          }" min="1" max="100">
       </div>
       <div class="mb-3">
           <label class="form-label">Aktif</label>
           <select class="form-select" id="constraint-active">
-              <option value="true" ${getVal("Active") === "true" ? "selected" : ""}>Evet</option>
-              <option value="false" ${getVal("Active") === "false" ? "selected" : ""}>Hayır</option>
+              <option value="true" ${
+                getVal("Active") === "true" ? "selected" : ""
+              }>Evet</option>
+              <option value="false" ${
+                getVal("Active") === "false" ? "selected" : ""
+              }>Hayır</option>
           </select>
       </div>
     `;
@@ -2045,14 +2306,20 @@ window.openConstraintEditForm = function (constraintType, idx, constraint) {
         formHtml += `
         <div class="mb-3">
             <label class="form-label">${field.label}</label>
-            <input type="${field.type}" class="form-control" id="constraint-${field.name}" placeholder="${field.placeholder || ""}" value="${getVal(field.name) || ""}">
+            <input type="${field.type}" class="form-control" id="constraint-${
+          field.name
+        }" placeholder="${field.placeholder || ""}" value="${
+          getVal(field.name) || ""
+        }">
         </div>
       `;
       });
       formHtml += `
       <div class="mb-3">
           <label class="form-label">Açıklama</label>
-          <textarea class="form-control" id="constraint-comments" rows="2">${getVal("Comments") || ""}</textarea>
+          <textarea class="form-control" id="constraint-comments" rows="2">${
+            getVal("Comments") || ""
+          }</textarea>
       </div>
     `;
       Swal.fire({
@@ -2065,12 +2332,17 @@ window.openConstraintEditForm = function (constraintType, idx, constraint) {
         preConfirm: () => {
           const dataObj = {
             WeightPercentage:
-              parseFloat(document.getElementById("constraint-weight").value) || 100,
-            Active: document.getElementById("constraint-active").value === "true",
-            Comments: document.getElementById("constraint-comments").value || "",
+              parseFloat(document.getElementById("constraint-weight").value) ||
+              100,
+            Active:
+              document.getElementById("constraint-active").value === "true",
+            Comments:
+              document.getElementById("constraint-comments").value || "",
           };
           config.fields.forEach((field) => {
-            dataObj[field.name] = document.getElementById(`constraint-${field.name}`).value;
+            dataObj[field.name] = document.getElementById(
+              `constraint-${field.name}`
+            ).value;
           });
           return { Type: constraintType, Index: cIdx, Data: dataObj };
         },
@@ -2087,7 +2359,11 @@ window.openConstraintEditForm = function (constraintType, idx, constraint) {
                 Swal.fire("Başarılı", "Kısıt başarıyla güncellendi", "success");
                 setTimeout(() => openConstraintDialog(constraintType), 500);
               } else {
-                Swal.fire("Hata", data.message || "Kısıt güncellenemedi", "error");
+                Swal.fire(
+                  "Hata",
+                  data.message || "Kısıt güncellenemedi",
+                  "error"
+                );
               }
             });
         }
@@ -2134,47 +2410,46 @@ window.deleteConstraint = function (constraintType, idx, constraint) {
 };
 
 function generateTimetable() {
-    Swal.fire({
-        title: "Çizelge Oluşturuluyor",
-        text: "Lütfen bekleyin...",
-        allowOutsideClick: false,
-        didOpen: () => {
-            Swal.showLoading();
-        }
-    });
+  Swal.fire({
+    title: "Çizelge Oluşturuluyor",
+    text: "Lütfen bekleyin...",
+    allowOutsideClick: false,
+    didOpen: () => {
+      Swal.showLoading();
+    },
+  });
 
-    fetch("/Home/Generate", {
-        method: "POST"
-    })
-        .then(response => response.json())
-        .then(data => {
-            Swal.close();
+  fetch("/Home/Generate", {
+    method: "POST",
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      Swal.close();
 
-            if (data.success) {
-                Swal.fire({
-                    icon: "success",
-                    title: "Başarılı!",
-                    html: `
+      if (data.success) {
+        Swal.fire({
+          icon: "success",
+          title: "Başarılı!",
+          html: `
                       ${data.message}<br/>
                       <a href="${data.downloadUrl}" class="btn btn-success mt-2" download>
                         Excel Dosyasını İndir
                       </a>
-                    `
-                });
-            }
-            else {
-                Swal.fire({
-                    icon: "error",
-                    title: "Hata!",
-                    text: data.message
-                });
-            }
-        })
-        .catch(error => {
-            Swal.fire({
-                icon: "error",
-                title: "İşlem Başarısız",
-                text: "Bir hata oluştu: " + error
-            });
+                    `,
         });
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "Hata!",
+          text: data.message,
+        });
+      }
+    })
+    .catch((error) => {
+      Swal.fire({
+        icon: "error",
+        title: "İşlem Başarısız",
+        text: "Bir hata oluştu: " + error,
+      });
+    });
 }

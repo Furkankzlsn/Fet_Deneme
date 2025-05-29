@@ -47,6 +47,8 @@ namespace Fet_Deneme.Services
         private ConstraintActivitiesNotOverlappingChecker? _activitiesNotOverlappingChecker;
         private List<ConstraintMinDaysBetweenActivities>? _constraintMinDaysBetweenActivities;
         private ConstraintMinDaysBetweenActivitiesChecker? _minDaysBetweenActivitiesChecker;
+        private List<ConstraintMaxStudentsInSelectedTimeSlot>? _constraintMaxStudentsInSelectedTimeSlot;
+        private ConstraintMaxStudentsInSelectedTimeSlotChecker? _maxStudentsInSelectedTimeSlotChecker;
 
         public TimetableGenerator(FetRoot data, string? rawXml = null)
         {
@@ -61,6 +63,7 @@ namespace Fet_Deneme.Services
                 _constraintActivityPreferredTimeSlots = _data.TimeConstraints.OfType<ConstraintActivityPreferredTimeSlots>().ToList();
                 _constraintActivitiesNotOverlapping = _data.TimeConstraints.OfType<ConstraintActivitiesNotOverlapping>().ToList();
                 _constraintMinDaysBetweenActivities = _data.TimeConstraints.OfType<ConstraintMinDaysBetweenActivities>().ToList();
+                _constraintMaxStudentsInSelectedTimeSlot = _data.TimeConstraints.OfType<ConstraintMaxStudentsInSelectedTimeSlot>().ToList();
             }
             if (_data != null && _data.Days != null && _data.Activities != null)
             {
@@ -70,6 +73,7 @@ namespace Fet_Deneme.Services
                 _activityPreferredTimeSlotsChecker = new ConstraintActivityPreferredTimeSlotsChecker(_constraintActivityPreferredTimeSlots ?? new List<ConstraintActivityPreferredTimeSlots>());
                 _activitiesNotOverlappingChecker = new ConstraintActivitiesNotOverlappingChecker(_constraintActivitiesNotOverlapping ?? new List<ConstraintActivitiesNotOverlapping>());
                 _minDaysBetweenActivitiesChecker = new ConstraintMinDaysBetweenActivitiesChecker(_constraintMinDaysBetweenActivities ?? new List<ConstraintMinDaysBetweenActivities>(), _data.Days);
+                _maxStudentsInSelectedTimeSlotChecker = new ConstraintMaxStudentsInSelectedTimeSlotChecker(_constraintMaxStudentsInSelectedTimeSlot ?? new List<ConstraintMaxStudentsInSelectedTimeSlot>());
                 _allActivities = _data.Activities;
             }
         }
@@ -190,6 +194,14 @@ namespace Fet_Deneme.Services
                 if (_activityMap == null)
                     _activityMap = allActivities.ToDictionary(a => a.Id, a => a);
                 if (_allActivities != null && !_minDaysBetweenActivitiesChecker.IsValid(assignments, activity, day, _activityMap, _allActivities))
+                    return false;
+            }
+            // ConstraintMaxStudentsInSelectedTimeSlot kontrolü
+            if (_maxStudentsInSelectedTimeSlotChecker != null)
+            {
+                if (_activityMap == null)
+                    _activityMap = allActivities.ToDictionary(a => a.Id, a => a);
+                if (!_maxStudentsInSelectedTimeSlotChecker.IsValid(activity, day, hour, assignments, _activityMap))
                     return false;
             }
 

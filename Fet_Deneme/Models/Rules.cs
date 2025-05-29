@@ -52,6 +52,7 @@ namespace Fet_Deneme.Models
         [XmlArrayItem("ConstraintActivitiesNotOverlapping", typeof(ConstraintActivitiesNotOverlapping))]
         [XmlArrayItem("ConstraintBreakTimes", typeof(ConstraintBreakTimes))]
         [XmlArrayItem("ConstraintActivityPreferredTimeSlots", typeof(ConstraintActivityPreferredTimeSlots))]
+        [XmlArrayItem("ConstraintMaxStudentsInSelectedTimeSlot", typeof(ConstraintMaxStudentsInSelectedTimeSlot))]
         public List<object>? TimeConstraints { get; set; }
     }
 
@@ -147,6 +148,25 @@ namespace Fet_Deneme.Models
     }
     [Serializable]
     public class BreakTime
+    {
+        [XmlElement("Day")] public string? Day { get; set; }
+        [XmlElement("Hour")] public string? Hour { get; set; }
+    }
+
+    // Constraint: Max Students In Selected Time Slot
+    [Serializable]
+    public class ConstraintMaxStudentsInSelectedTimeSlot
+    {
+        [XmlElement("Weight_Percentage")] public int WeightPercentage { get; set; } = 100;
+        [XmlElement("Number_of_Selected_Time_Slots")] public int NumberOfSelectedTimeSlots { get; set; }
+        [XmlElement("Selected_Time_Slot")]
+        public List<SelectedTimeSlot>? SelectedTimeSlots { get; set; }
+        [XmlElement("Max_Students")] public int MaxStudents { get; set; }
+        [XmlElement("Active")] public bool Active { get; set; } = true;
+        [XmlElement("Comments")] public string? Comments { get; set; }
+    }
+    [Serializable]
+    public class SelectedTimeSlot
     {
         [XmlElement("Day")] public string? Day { get; set; }
         [XmlElement("Hour")] public string? Hour { get; set; }
