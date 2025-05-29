@@ -4,6 +4,9 @@ using System.IO;
 using Fet_Deneme.Models;
 using ActivityModel = Fet_Deneme.Models.Activity;
 using System.Text.Json;
+using Fet_Deneme.Services;
+using System.Xml.Serialization;
+using ClosedXML.Excel; // dosyanın en üstüne ekle
 
 namespace Fet_Deneme.Controllers
 {
@@ -1562,6 +1565,62 @@ case "hours":
             {
                 return Json(new { success = false, message = ex.Message });
             }
+        }
+
+        [HttpPost]
+        public IActionResult Generate()
+        {
+            if (string.IsNullOrEmpty(CurrentXmlContent))
+                return Json(new { success = false, message = "Henüz yüklenmiş bir .fet içeriği yok." });
+
+            using var stringReader = new StringReader(CurrentXmlContent);
+            var serializer = new XmlSerializer(typeof(FetRoot));
+            var fetData = (FetRoot)serializer.Deserialize(stringReader)!;
+
+            // TimetableGenerator'a rawXml parametresi de gönder
+            var generator = new TimetableGenerator(fetData, CurrentXmlContent);
+            var result = generator.Generate();
+
+            if (!result.Success)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = $"Çakışma: Activity ID {result.FailedActivityId} için uygun zaman bulunamadı.",
+                    failedActivityId = result.FailedActivityId
+                });
+            }
+
+            var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Çizelge");
+
+            worksheet.Cell(1, 1).Value = "Activity ID";
+            worksheet.Cell(1, 2).Value = "Day";
+            worksheet.Cell(1, 3).Value = "Hour";
+
+            int row = 2;
+            foreach (var assign in result.Assignments)
+            {
+                worksheet.Cell(row, 1).Value = assign.ActivityId;
+                worksheet.Cell(row, 2).Value = assign.Day;
+                worksheet.Cell(row, 3).Value = assign.Hour;
+                row++;
+            }
+
+            // wwwroot içinde dosyayı kaydet
+            var fileName = $"timetable_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "outputs");
+            Directory.CreateDirectory(filePath);
+            var fullPath = Path.Combine(filePath, fileName);
+            workbook.SaveAs(fullPath);
+
+            // İstemciye JSON içinde dosya linkini döndür
+            return Json(new
+            {
+                success = true,
+                message = "Çizelge başarıyla oluşturuldu.",
+                downloadUrl = $"/outputs/{fileName}"
+            });
         }
 
         private T ConvertData<T>(object data)

@@ -2131,3 +2131,49 @@ window.deleteConstraint = function (constraintType, idx, constraint) {
       });
     });
 };
+
+function generateTimetable() {
+    Swal.fire({
+        title: "Çizelge Oluşturuluyor",
+        text: "Lütfen bekleyin...",
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    fetch("/Home/Generate", {
+        method: "POST"
+    })
+        .then(response => response.json())
+        .then(data => {
+            Swal.close();
+
+            if (data.success) {
+                Swal.fire({
+                    icon: "success",
+                    title: "Başarılı!",
+                    html: `
+                      ${data.message}<br/>
+                      <a href="${data.downloadUrl}" class="btn btn-success mt-2" download>
+                        Excel Dosyasını İndir
+                      </a>
+                    `
+                });
+            }
+            else {
+                Swal.fire({
+                    icon: "error",
+                    title: "Hata!",
+                    text: data.message
+                });
+            }
+        })
+        .catch(error => {
+            Swal.fire({
+                icon: "error",
+                title: "İşlem Başarısız",
+                text: "Bir hata oluştu: " + error
+            });
+        });
+}
